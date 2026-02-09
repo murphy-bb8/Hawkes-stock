@@ -1,0 +1,1656 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>&#x591a;&#x7ef4; Hawkes &#x8fc7;&#x7a0b;&#x5efa;&#x6a21;&#xff1a;&#x4ece;&#x5e38;&#x6570;&#x57fa;&#x7ebf;&#x5230;&#x5916;&#x751f;&#x9a71;&#x52a8;&#x7684;&#x9012;&#x8fdb;&#x5b9e;&#x9a8c;</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">
+<link href="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.css" rel="stylesheet" type="text/css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <h1 id="多维-hawkes-过程建模从常数基线到外生驱动的递进实验">多维 Hawkes 过程建模：从常数基线到外生驱动的递进实验</h1>
+<h2 id="项目简介">项目简介</h2>
+<p>本项目围绕 <strong>A 股限价订单簿中的有毒/无毒订单流</strong>，构建 <strong>4 维多元 Hawkes 过程</strong> 模型，研究买卖双方有毒与无毒订单之间的自激励与交叉激励结构。</p>
+<p>核心研究问题：</p>
+<ol>
+<li>不同价格水平的股票，其订单流自激励强度有何差异？</li>
+<li>引入日内时段效应（开盘/午盘/收盘）能否改善基线强度的刻画？</li>
+<li>引入价差变化率（re_spread）作为外生驱动项，能否进一步提升模型拟合？</li>
+</ol>
+<p>为此，我们设计了 <strong>三种递进的模型变体</strong>，在统一的 GOF v2 评估框架下进行公平对比。</p>
+<hr>
+<h2 id="建模思路与三种模型的递进关系">建模思路与三种模型的递进关系</h2>
+<h3 id="研究对象">研究对象</h3>
+<ul>
+<li><strong>数据</strong>：2019 年 12 月，沪市 45 只 A 股，按股价分为 High / Mid / Low 三组（各 15 只）</li>
+<li><strong>4 个事件维度</strong>：</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">维度编号</th>
+<th style="text-align:center">缩写</th>
+<th style="text-align:left">含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">0</td>
+<td style="text-align:center">BT</td>
+<td style="text-align:left">Buy Toxic — 买方有毒订单</td>
+</tr>
+<tr>
+<td style="text-align:center">1</td>
+<td style="text-align:center">BN</td>
+<td style="text-align:left">Buy Not Toxic — 买方无毒订单</td>
+</tr>
+<tr>
+<td style="text-align:center">2</td>
+<td style="text-align:center">ST</td>
+<td style="text-align:left">Sell Toxic — 卖方有毒订单</td>
+</tr>
+<tr>
+<td style="text-align:center">3</td>
+<td style="text-align:center">SN</td>
+<td style="text-align:left">Sell Not Toxic — 卖方无毒订单</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>交易时段</strong>：每日 4 小时 = 14400 秒（9:30–11:30, 13:00–15:00）</li>
+</ul>
+<h3 id="递进逻辑">递进逻辑</h3>
+<pre><code>Model A (常数 μ)          →  Model B (时变 μ)           →  Model C (时变 μ + 外生项)
+最简洁的基线假设              引入日内时段结构               引入市场微观结构变量
+β = 10 (grid search)        β = 10 (grid search)          β = 50 (grid search)
+无外生项                     γ_open / γ_mid / γ_close      γ_open/mid/close + γ_spread·re_spread(t)
+</code></pre>
+<p>每一步都在前一步的基础上增加一个建模维度，以检验额外复杂度是否带来统计上的改善。</p>
+<hr>
+<h2 id="模型公式">模型公式</h2>
+<h3 id="model-a--常数基线-μ无外生项">Model A — 常数基线 μ（无外生项）</h3>
+<p class="katex-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>λ</mi><mi>i</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>+</mo><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mn>4</mn></munderover><munder><mo>∑</mo><mrow><msubsup><mi>t</mi><mi>k</mi><mi>j</mi></msubsup><mo>&lt;</mo><mi>t</mi></mrow></munder><msub><mi>A</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mtext> </mtext><msup><mi>e</mi><mrow><mo>−</mo><mi>β</mi><mo stretchy="false">(</mo><mi>t</mi><mo>−</mo><msubsup><mi>t</mi><mi>k</mi><mi>j</mi></msubsup><mo stretchy="false">)</mo></mrow></msup></mrow><annotation encoding="application/x-tex">\lambda_i(t) = \mu_i + \sum_{j=1}^{4} \sum_{t_k^j &lt; t} A_{ij} \, e^{-\beta(t - t_k^j)}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">λ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:3.5285em;vertical-align:-1.7274em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8011em;"><span style="top:-1.8723em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">4</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4138em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.6657em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9548em;"><span style="top:-2.1528em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span><span style="top:-2.9837em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3472em;"><span></span></span></span></span></span></span><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.7274em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.0813em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mathnormal mtight" style="margin-right:0.05278em;">β</span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9548em;"><span style="top:-2.1528em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span><span style="top:-2.9837em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3472em;"><span></span></span></span></span></span></span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span></span></span></span></span></p>
+<p>最简洁的多元 Hawkes 模型。基线强度 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>μ</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\mu_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 为常数，不随日内时间变化。</p>
+<h3 id="model-b--时变基线-μ日内时段效应">Model B — 时变基线 μ（日内时段效应）</h3>
+<p class="katex-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>λ</mi><mi>i</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo><msubsup><mi>μ</mi><mi>i</mi><mtext>corrected</mtext></msubsup><mo>⋅</mo><mi>exp</mi><mo>⁡</mo><mtext> ⁣</mtext><mo fence="true" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msub><mi>γ</mi><mrow><mtext>open</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub><mo>⋅</mo><msub><mi mathvariant="double-struck">I</mi><mtext>OPEN30</mtext></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>+</mo><msub><mi>γ</mi><mrow><mtext>mid</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub><mo>⋅</mo><msub><mi mathvariant="double-struck">I</mi><mtext>MID</mtext></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>+</mo><msub><mi>γ</mi><mrow><mtext>close</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub><mo>⋅</mo><msub><mi mathvariant="double-struck">I</mi><mtext>CLOSE30</mtext></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo fence="true" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo>+</mo><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mn>4</mn></munderover><munder><mo>∑</mo><mrow><msubsup><mi>t</mi><mi>k</mi><mi>j</mi></msubsup><mo>&lt;</mo><mi>t</mi></mrow></munder><msub><mi>A</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mtext> </mtext><msup><mi>e</mi><mrow><mo>−</mo><mi>β</mi><mo stretchy="false">(</mo><mi>t</mi><mo>−</mo><msubsup><mi>t</mi><mi>k</mi><mi>j</mi></msubsup><mo stretchy="false">)</mo></mrow></msup></mrow><annotation encoding="application/x-tex">\lambda_i(t) = \mu_i^{\text{corrected}} \cdot \exp\!\bigl(\gamma_{\text{open},i} \cdot \mathbb{I}_{\text{OPEN30}}(t) + \gamma_{\text{mid},i} \cdot \mathbb{I}_{\text{MID}}(t) + \gamma_{\text{close},i} \cdot \mathbb{I}_{\text{CLOSE30}}(t)\bigr) + \sum_{j=1}^{4} \sum_{t_k^j &lt; t} A_{ij} \, e^{-\beta(t - t_k^j)}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">λ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1461em;vertical-align:-0.247em;"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">corrected</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mop">exp</span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mopen"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">open</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">OPEN30</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7306em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mid</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">MID</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7306em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">close</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord"><span class="mord mathbb">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">CLOSE30</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span><span class="mclose"><span class="delimsizing size1">)</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:3.5285em;vertical-align:-1.7274em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8011em;"><span style="top:-1.8723em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">4</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4138em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.6657em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9548em;"><span style="top:-2.1528em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span><span style="top:-2.9837em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3472em;"><span></span></span></span></span></span></span><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.7274em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.0813em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mathnormal mtight" style="margin-right:0.05278em;">β</span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9548em;"><span style="top:-2.1528em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span><span style="top:-2.9837em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3472em;"><span></span></span></span></span></span></span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span></span></span></span></span></p>
+<p>其中指示函数定义为：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">指示函数</th>
+<th style="text-align:left">时段</th>
+<th style="text-align:left">含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="double-struck">I</mi><mtext>OPEN30</mtext></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathbb{I}_{\text{OPEN30}}(t)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">OPEN30</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span></span></span></span></td>
+<td style="text-align:left">9:30–10:00</td>
+<td style="text-align:left">开盘前 30 分钟</td>
+</tr>
+<tr>
+<td style="text-align:left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="double-struck">I</mi><mtext>MID</mtext></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathbb{I}_{\text{MID}}(t)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">MID</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span></span></span></span></td>
+<td style="text-align:left">13:00–13:30</td>
+<td style="text-align:left">午盘开盘 30 分钟</td>
+</tr>
+<tr>
+<td style="text-align:left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="double-struck">I</mi><mtext>CLOSE30</mtext></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathbb{I}_{\text{CLOSE30}}(t)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">CLOSE30</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span></span></span></span></td>
+<td style="text-align:left">14:30–15:00</td>
+<td style="text-align:left">收盘前 30 分钟</td>
+</tr>
+</tbody>
+</table>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>μ</mi><mi>i</mi><mtext>corrected</mtext></msubsup></mrow><annotation encoding="application/x-tex">\mu_i^{\text{corrected}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1078em;vertical-align:-0.2587em;"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-2.4413em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">corrected</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2587em;"><span></span></span></span></span></span></span></span></span></span> 为经日内效应校正后的基准强度，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi></mrow><annotation encoding="application/x-tex">\gamma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span></span></span></span> 参数刻画各时段对强度的乘性放大/缩小。</p>
+<h3 id="model-c--时变基线-μ--re_spread-外生项">Model C — 时变基线 μ + re_spread 外生项</h3>
+<p class="katex-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>λ</mi><mi>i</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo><msubsup><mi>μ</mi><mi>i</mi><mtext>corrected</mtext></msubsup><mo>⋅</mo><mi>exp</mi><mo>⁡</mo><mtext> ⁣</mtext><mo fence="true" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msub><mi>γ</mi><mrow><mtext>open</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub><mo>⋅</mo><msub><mi mathvariant="double-struck">I</mi><mtext>OPEN30</mtext></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>+</mo><msub><mi>γ</mi><mrow><mtext>mid</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub><mo>⋅</mo><msub><mi mathvariant="double-struck">I</mi><mtext>MID</mtext></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>+</mo><msub><mi>γ</mi><mrow><mtext>close</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub><mo>⋅</mo><msub><mi mathvariant="double-struck">I</mi><mtext>CLOSE30</mtext></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo fence="true" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo>+</mo><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mn>4</mn></munderover><munder><mo>∑</mo><mrow><msubsup><mi>t</mi><mi>k</mi><mi>j</mi></msubsup><mo>&lt;</mo><mi>t</mi></mrow></munder><msub><mi>A</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mtext> </mtext><msup><mi>e</mi><mrow><mo>−</mo><mi>β</mi><mo stretchy="false">(</mo><mi>t</mi><mo>−</mo><msubsup><mi>t</mi><mi>k</mi><mi>j</mi></msubsup><mo stretchy="false">)</mo></mrow></msup><mo>+</mo><msub><mi>γ</mi><mrow><mtext>spread</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub><mo>⋅</mo><mtext>re_spread</mtext><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\lambda_i(t) = \mu_i^{\text{corrected}} \cdot \exp\!\bigl(\gamma_{\text{open},i} \cdot \mathbb{I}_{\text{OPEN30}}(t) + \gamma_{\text{mid},i} \cdot \mathbb{I}_{\text{MID}}(t) + \gamma_{\text{close},i} \cdot \mathbb{I}_{\text{CLOSE30}}(t)\bigr) + \sum_{j=1}^{4} \sum_{t_k^j &lt; t} A_{ij} \, e^{-\beta(t - t_k^j)} + \gamma_{\text{spread},i} \cdot \text{re\_spread}(t)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">λ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1461em;vertical-align:-0.247em;"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">corrected</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mop">exp</span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mopen"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">open</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">OPEN30</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7306em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mid</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">MID</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7306em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">close</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord"><span class="mord mathbb">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">CLOSE30</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span><span class="mclose"><span class="delimsizing size1">)</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:3.5285em;vertical-align:-1.7274em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8011em;"><span style="top:-1.8723em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">4</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4138em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.6657em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9548em;"><span style="top:-2.1528em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span><span style="top:-2.9837em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3472em;"><span></span></span></span></span></span></span><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.7274em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.0813em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mathnormal mtight" style="margin-right:0.05278em;">β</span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9548em;"><span style="top:-2.1528em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span><span style="top:-2.9837em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3472em;"><span></span></span></span></span></span></span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7306em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">re_spread</span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span></span></span></span></span></p>
+<p>在 Model B 的基础上，增加价差变化率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>re_spread</mtext><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{re\_spread}(t)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">re_spread</span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span></span></span></span> 作为外生驱动项，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mrow><mtext>spread</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread},i}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 为其对各维度强度的影响系数。</p>
+<hr>
+<h2 id="参数含义总表">参数含义总表</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">参数</th>
+<th style="text-align:center">符号</th>
+<th style="text-align:left">含义</th>
+<th style="text-align:center">Model A</th>
+<th style="text-align:center">Model B</th>
+<th style="text-align:center">Model C</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">基线强度</td>
+<td style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>μ</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\mu_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td style="text-align:left">第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span> 维的背景事件到达率</td>
+<td style="text-align:center">✓</td>
+<td style="text-align:center">✓ (corrected)</td>
+<td style="text-align:center">✓ (corrected)</td>
+</tr>
+<tr>
+<td style="text-align:left">激励矩阵</td>
+<td style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">A_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td style="text-align:left">第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>j</mi></mrow><annotation encoding="application/x-tex">j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05724em;">j</span></span></span></span> 维事件对第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span> 维的激励系数</td>
+<td style="text-align:center">✓</td>
+<td style="text-align:center">✓</td>
+<td style="text-align:center">✓</td>
+</tr>
+<tr>
+<td style="text-align:left">衰减参数</td>
+<td style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi></mrow><annotation encoding="application/x-tex">\beta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span></span></span></span></td>
+<td style="text-align:left">激励效应的指数衰减速率</td>
+<td style="text-align:center">✓ (=10)</td>
+<td style="text-align:center">✓ (=10)</td>
+<td style="text-align:center">✓ (=50)</td>
+</tr>
+<tr>
+<td style="text-align:left">分枝比</td>
+<td style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ρ</mi><mo stretchy="false">(</mo><mi>A</mi><mi mathvariant="normal">/</mi><mi>β</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\rho(A/\beta)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">ρ</span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="mclose">)</span></span></span></span></td>
+<td style="text-align:left">谱半径，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&lt;</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">&lt;1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 保证平稳性</td>
+<td style="text-align:center">✓</td>
+<td style="text-align:center">✓</td>
+<td style="text-align:center">✓</td>
+</tr>
+<tr>
+<td style="text-align:left">开盘效应</td>
+<td style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mrow><mtext>open</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{open},i}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">open</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td style="text-align:left">开盘 30 min 的强度乘子</td>
+<td style="text-align:center">—</td>
+<td style="text-align:center">✓</td>
+<td style="text-align:center">✓</td>
+</tr>
+<tr>
+<td style="text-align:left">午盘效应</td>
+<td style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mrow><mtext>mid</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{mid},i}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mid</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td style="text-align:left">午盘 30 min 的强度乘子</td>
+<td style="text-align:center">—</td>
+<td style="text-align:center">✓</td>
+<td style="text-align:center">✓</td>
+</tr>
+<tr>
+<td style="text-align:left">收盘效应</td>
+<td style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mrow><mtext>close</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{close},i}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">close</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td style="text-align:left">收盘 30 min 的强度乘子</td>
+<td style="text-align:center">—</td>
+<td style="text-align:center">✓</td>
+<td style="text-align:center">✓</td>
+</tr>
+<tr>
+<td style="text-align:left">价差外生项</td>
+<td style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mrow><mtext>spread</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread},i}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td style="text-align:left">re_spread 对强度的线性贡献</td>
+<td style="text-align:center">—</td>
+<td style="text-align:center">—</td>
+<td style="text-align:center">✓</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="估计方法">估计方法</h2>
+<ul>
+<li><strong>似然函数</strong>：多元 Hawkes 过程的精确对数似然（非近似）</li>
+<li><strong>优化器</strong>：L-BFGS-B（带边界约束）</li>
+<li><strong>衰减参数</strong>：网格搜索最优 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi></mrow><annotation encoding="application/x-tex">\beta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span></span></span></span>（Model A/B 搜索范围 0.3~10，Model C 搜索范围 0.3~50）</li>
+<li><strong>稳定性约束</strong>：要求分枝比 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ρ</mi><mo>&lt;</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\rho &lt; 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7335em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">ρ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></li>
+<li><strong>数据拆分</strong>：全量数据拟合 + 70/30 时间切分验证</li>
+</ul>
+<hr>
+<h2 id="gof-v2-评估体系">GOF v2 评估体系</h2>
+<p>三种模型使用 <strong>完全统一</strong> 的拟合优度评估框架，基于时间重标残差（time-rescaling residuals）：</p>
+<blockquote>
+<p>若模型正确，则重标残差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>r</mi><mi>k</mi></msub><mo>=</mo><msub><mi mathvariant="normal">Λ</mi><mi>i</mi></msub><mo stretchy="false">(</mo><msub><mi>t</mi><mi>k</mi></msub><mo stretchy="false">)</mo><mo>−</mo><msub><mi mathvariant="normal">Λ</mi><mi>i</mi></msub><mo stretchy="false">(</mo><msub><mi>t</mi><mrow><mi>k</mi><mo>−</mo><mn>1</mn></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">r_k = \Lambda_i(t_k) - \Lambda_i(t_{k-1})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord">Λ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord">Λ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> 应服从 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>Exp</mtext><mo stretchy="false">(</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{Exp}(1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">Exp</span></span><span class="mopen">(</span><span class="mord">1</span><span class="mclose">)</span></span></span></span> 分布，且相互独立。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">指标</th>
+<th style="text-align:center">符号</th>
+<th style="text-align:left">含义</th>
+<th style="text-align:left">计算方式</th>
+<th style="text-align:center">理想值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">综合评分</td>
+<td style="text-align:center">GOF Score</td>
+<td style="text-align:left">加权综合 ∈ [0,1]</td>
+<td style="text-align:left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.3</mn><mo>×</mo><msub><mi>S</mi><mtext>mean</mtext></msub><mo>+</mo><mn>0.3</mn><mo>×</mo><msub><mi>S</mi><msub><mi>W</mi><mn>1</mn></msub></msub><mo>+</mo><mn>0.2</mn><mo>×</mo><msub><mi>S</mi><mtext>LB</mtext></msub><mo>+</mo><mn>0.2</mn><mo>×</mo><msub><mi>S</mi><mtext>ACF</mtext></msub></mrow><annotation encoding="application/x-tex">0.3 \times S_{\text{mean}} + 0.3 \times S_{W_1} + 0.2 \times S_{\text{LB}} + 0.2 \times S_{\text{ACF}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mean</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9334em;vertical-align:-0.2501em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">LB</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ACF</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td style="text-align:center">→ 1</td>
+</tr>
+<tr>
+<td style="text-align:left">残差均值偏差</td>
+<td style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><mi>E</mi><mo stretchy="false">[</mo><mi>r</mi><mo stretchy="false">]</mo><mo>−</mo><mn>1</mn><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|E[r]-1|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.05764em;">E</span><span class="mopen">[</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1∣</span></span></span></span></td>
+<td style="text-align:left">均值偏离 Exp(1) 理论值</td>
+<td style="text-align:left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><mover accent="true"><mi>r</mi><mo>ˉ</mo></mover><mo>−</mo><mn>1</mn><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|\bar{r} - 1|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.5678em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">ˉ</span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1∣</span></span></span></span></td>
+<td style="text-align:center">→ 0</td>
+</tr>
+<tr>
+<td style="text-align:left">Wasserstein-1</td>
+<td style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>W</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">W_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td style="text-align:left">分布距离（Earth Mover's）</td>
+<td style="text-align:left">子采样 5000 点计算</td>
+<td style="text-align:center">→ 0</td>
+</tr>
+<tr>
+<td style="text-align:left">QQ-MAE</td>
+<td style="text-align:center">—</td>
+<td style="text-align:left">QQ 线偏离 45° 线</td>
+<td style="text-align:left">200 个分位点的平均绝对偏差</td>
+<td style="text-align:center">→ 0</td>
+</tr>
+<tr>
+<td style="text-align:left">Ljung-Box</td>
+<td style="text-align:center">LB Pass</td>
+<td style="text-align:left">残差独立性检验</td>
+<td style="text-align:left">lag = 5, 10, 20 联合检验</td>
+<td style="text-align:center">Pass</td>
+</tr>
+<tr>
+<td style="text-align:left">ACF</td>
+<td style="text-align:center">—</td>
+<td style="text-align:left">自相关函数</td>
+<td style="text-align:left">lag 1~20 的自相关系数</td>
+<td style="text-align:center">→ 0</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="实验结果">实验结果</h2>
+<h3 id="数据概况">数据概况</h3>
+<ul>
+<li><strong>样本期</strong>：2019 年 12 月（22 个交易日）</li>
+<li><strong>股票数</strong>：45 只沪市 A 股</li>
+<li><strong>分组依据</strong>：按月均价分为 High（高价）/ Mid（中价）/ Low（低价）各 15 只</li>
+<li><strong>事件总量</strong>：每只股票约数千至数万个事件</li>
+</ul>
+<hr>
+<h3 id="三种模型核心指标对比">三种模型核心指标对比</h3>
+<h4 id="分枝比branching-ratio">分枝比（Branching Ratio）</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">价格组</th>
+<th style="text-align:center">Model A (常数 μ)</th>
+<th style="text-align:center">Model B (时变 μ)</th>
+<th style="text-align:center">Model C (时变 μ + exog)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center"><strong>0.900 ± 0.037</strong></td>
+<td style="text-align:center"><strong>0.900 ± 0.037</strong></td>
+<td style="text-align:center"><strong>0.882 ± 0.039</strong></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center"><strong>0.944 ± 0.020</strong></td>
+<td style="text-align:center"><strong>0.944 ± 0.020</strong></td>
+<td style="text-align:center"><strong>0.931 ± 0.021</strong></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center"><strong>0.969 ± 0.009</strong></td>
+<td style="text-align:center"><strong>0.969 ± 0.009</strong></td>
+<td style="text-align:center"><strong>0.962 ± 0.009</strong></td>
+</tr>
+<tr>
+<td style="text-align:center">全部稳定 (BR&lt;1)</td>
+<td style="text-align:center">45/45 ✓</td>
+<td style="text-align:center">45/45 ✓</td>
+<td style="text-align:center">45/45 ✓</td>
+</tr>
+</tbody>
+</table>
+<p><strong>解读</strong>：</p>
+<ul>
+<li>三种模型下分枝比一致呈现 <strong>High &lt; Mid &lt; Low</strong> 的梯度，低价股自激励更强</li>
+<li>Model C 的分枝比略低于 A/B，因为部分强度被外生项 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 吸收</li>
+<li>所有 45 只股票在三种模型下均满足平稳性条件（BR &lt; 1）</li>
+</ul>
+<h4 id="gof-综合评分">GOF 综合评分</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">价格组</th>
+<th style="text-align:center">Model A (常数 μ)</th>
+<th style="text-align:center">Model B (时变 μ)</th>
+<th style="text-align:center">Model C (时变 μ + exog)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center"><strong>0.858</strong></td>
+<td style="text-align:center"><strong>0.862</strong></td>
+<td style="text-align:center"><strong>0.831</strong></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center"><strong>0.853</strong></td>
+<td style="text-align:center"><strong>0.847</strong></td>
+<td style="text-align:center"><strong>0.783</strong></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center"><strong>0.842</strong></td>
+<td style="text-align:center"><strong>0.853</strong></td>
+<td style="text-align:center"><strong>0.758</strong></td>
+</tr>
+<tr>
+<td style="text-align:center">均值</td>
+<td style="text-align:center"><strong>0.851</strong></td>
+<td style="text-align:center"><strong>0.854</strong></td>
+<td style="text-align:center"><strong>0.791</strong></td>
+</tr>
+</tbody>
+</table>
+<h4 id="gof-全维度通过率44-pass">GOF 全维度通过率（4/4 pass）</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">价格组</th>
+<th style="text-align:center">Model A</th>
+<th style="text-align:center">Model B</th>
+<th style="text-align:center">Model C</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">7/15 (47%)</td>
+<td style="text-align:center">9/15 (60%)</td>
+<td style="text-align:center">7/15 (47%)</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">8/15 (53%)</td>
+<td style="text-align:center">8/15 (53%)</td>
+<td style="text-align:center">5/15 (33%)</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">7/15 (47%)</td>
+<td style="text-align:center">8/15 (53%)</td>
+<td style="text-align:center">0/15 (0%)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="wasserstein-1-距离">Wasserstein-1 距离</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">价格组</th>
+<th style="text-align:center">Model A</th>
+<th style="text-align:center">Model B</th>
+<th style="text-align:center">Model C</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">0.399</td>
+<td style="text-align:center">0.400</td>
+<td style="text-align:center">0.402</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">0.527</td>
+<td style="text-align:center">0.518</td>
+<td style="text-align:center">0.577</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">0.605</td>
+<td style="text-align:center">0.601</td>
+<td style="text-align:center">0.681</td>
+</tr>
+</tbody>
+</table>
+<h4 id="qq-mae">QQ-MAE</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">价格组</th>
+<th style="text-align:center">Model A</th>
+<th style="text-align:center">Model B</th>
+<th style="text-align:center">Model C</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">0.341</td>
+<td style="text-align:center">0.342</td>
+<td style="text-align:center">0.342</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">0.425</td>
+<td style="text-align:center">0.431</td>
+<td style="text-align:center">0.453</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">0.468</td>
+<td style="text-align:center">0.471</td>
+<td style="text-align:center">0.498</td>
+</tr>
+</tbody>
+</table>
+<h4 id="残差均值偏差-mean1">残差均值偏差 |Mean−1|</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">价格组</th>
+<th style="text-align:center">Model A</th>
+<th style="text-align:center">Model B</th>
+<th style="text-align:center">Model C</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">0.012</td>
+<td style="text-align:center">0.011</td>
+<td style="text-align:center">0.068</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">0.026</td>
+<td style="text-align:center">0.027</td>
+<td style="text-align:center">0.188</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">0.024</td>
+<td style="text-align:center">0.025</td>
+<td style="text-align:center">0.233</td>
+</tr>
+</tbody>
+</table>
+<p><strong>关键发现</strong>：</p>
+<ol>
+<li><strong>Model A 与 Model B 的 GOF 非常接近</strong>，时变基线的改善幅度有限，说明日内时段效应主要影响基线水平而非残差分布形态</li>
+<li><strong>Model C 的 GOF 反而低于 A/B</strong>，尤其在 Low Price 组（0.758 vs 0.842/0.853），原因是 Model C 使用更高的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi><mo>=</mo><mn>50</mn></mrow><annotation encoding="application/x-tex">\beta=50</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">50</span></span></span></span>（衰减更快），且外生项 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 在低价股中波动极大，引入了额外的模型误差</li>
+<li><strong>三种模型一致显示</strong>：GOF 随价格降低而下降（High &gt; Mid &gt; Low），Toxic 维度 (BT/ST) 拟合质量低于 Non-Toxic 维度 (BN/SN)</li>
+</ol>
+<hr>
+<h3 id="各维度-gof-详细对比">各维度 GOF 详细对比</h3>
+<h4 id="model-a--常数-μ">Model A — 常数 μ</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">组</th>
+<th style="text-align:center">维度</th>
+<th style="text-align:center">GOF Score</th>
+<th style="text-align:center">W1</th>
+<th style="text-align:center">QQ-MAE</th>
+<th style="text-align:center">|Mean−1|</th>
+<th style="text-align:center">LB Pass%</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">BT</td>
+<td style="text-align:center">0.864</td>
+<td style="text-align:center">0.416</td>
+<td style="text-align:center">0.364</td>
+<td style="text-align:center">0.013</td>
+<td style="text-align:center">73%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">BN</td>
+<td style="text-align:center">0.868</td>
+<td style="text-align:center">0.325</td>
+<td style="text-align:center">0.277</td>
+<td style="text-align:center">0.012</td>
+<td style="text-align:center">93%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">ST</td>
+<td style="text-align:center">0.844</td>
+<td style="text-align:center">0.463</td>
+<td style="text-align:center">0.393</td>
+<td style="text-align:center">0.013</td>
+<td style="text-align:center">80%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">SN</td>
+<td style="text-align:center">0.857</td>
+<td style="text-align:center">0.388</td>
+<td style="text-align:center">0.330</td>
+<td style="text-align:center">0.011</td>
+<td style="text-align:center">93%</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">BT</td>
+<td style="text-align:center">0.840</td>
+<td style="text-align:center">0.617</td>
+<td style="text-align:center">0.495</td>
+<td style="text-align:center">0.028</td>
+<td style="text-align:center">93%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">BN</td>
+<td style="text-align:center">0.875</td>
+<td style="text-align:center">0.404</td>
+<td style="text-align:center">0.338</td>
+<td style="text-align:center">0.023</td>
+<td style="text-align:center">80%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">ST</td>
+<td style="text-align:center">0.846</td>
+<td style="text-align:center">0.599</td>
+<td style="text-align:center">0.502</td>
+<td style="text-align:center">0.030</td>
+<td style="text-align:center">87%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">SN</td>
+<td style="text-align:center">0.853</td>
+<td style="text-align:center">0.485</td>
+<td style="text-align:center">0.385</td>
+<td style="text-align:center">0.024</td>
+<td style="text-align:center">87%</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">BT</td>
+<td style="text-align:center">0.796</td>
+<td style="text-align:center">0.820</td>
+<td style="text-align:center">0.619</td>
+<td style="text-align:center">0.036</td>
+<td style="text-align:center">80%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">BN</td>
+<td style="text-align:center">0.886</td>
+<td style="text-align:center">0.342</td>
+<td style="text-align:center">0.273</td>
+<td style="text-align:center">0.012</td>
+<td style="text-align:center">87%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">ST</td>
+<td style="text-align:center">0.812</td>
+<td style="text-align:center">0.829</td>
+<td style="text-align:center">0.654</td>
+<td style="text-align:center">0.039</td>
+<td style="text-align:center">87%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">SN</td>
+<td style="text-align:center">0.874</td>
+<td style="text-align:center">0.430</td>
+<td style="text-align:center">0.328</td>
+<td style="text-align:center">0.012</td>
+<td style="text-align:center">87%</td>
+</tr>
+</tbody>
+</table>
+<h4 id="model-b--时变-μ">Model B — 时变 μ</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">组</th>
+<th style="text-align:center">维度</th>
+<th style="text-align:center">GOF Score</th>
+<th style="text-align:center">W1</th>
+<th style="text-align:center">QQ-MAE</th>
+<th style="text-align:center">|Mean−1|</th>
+<th style="text-align:center">LB Pass%</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">BT</td>
+<td style="text-align:center">0.857</td>
+<td style="text-align:center">0.434</td>
+<td style="text-align:center">0.365</td>
+<td style="text-align:center">0.012</td>
+<td style="text-align:center">87%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">BN</td>
+<td style="text-align:center">0.871</td>
+<td style="text-align:center">0.329</td>
+<td style="text-align:center">0.278</td>
+<td style="text-align:center">0.010</td>
+<td style="text-align:center">87%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">ST</td>
+<td style="text-align:center">0.873</td>
+<td style="text-align:center">0.452</td>
+<td style="text-align:center">0.394</td>
+<td style="text-align:center">0.012</td>
+<td style="text-align:center">87%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">SN</td>
+<td style="text-align:center">0.846</td>
+<td style="text-align:center">0.384</td>
+<td style="text-align:center">0.331</td>
+<td style="text-align:center">0.010</td>
+<td style="text-align:center">93%</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">BT</td>
+<td style="text-align:center">0.847</td>
+<td style="text-align:center">0.608</td>
+<td style="text-align:center">0.495</td>
+<td style="text-align:center">0.029</td>
+<td style="text-align:center">93%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">BN</td>
+<td style="text-align:center">0.883</td>
+<td style="text-align:center">0.417</td>
+<td style="text-align:center">0.340</td>
+<td style="text-align:center">0.024</td>
+<td style="text-align:center">93%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">ST</td>
+<td style="text-align:center">0.847</td>
+<td style="text-align:center">0.593</td>
+<td style="text-align:center">0.502</td>
+<td style="text-align:center">0.031</td>
+<td style="text-align:center">93%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">SN</td>
+<td style="text-align:center">0.811</td>
+<td style="text-align:center">0.455</td>
+<td style="text-align:center">0.386</td>
+<td style="text-align:center">0.024</td>
+<td style="text-align:center">73%</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">BT</td>
+<td style="text-align:center">0.821</td>
+<td style="text-align:center">0.789</td>
+<td style="text-align:center">0.622</td>
+<td style="text-align:center">0.035</td>
+<td style="text-align:center">93%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">BN</td>
+<td style="text-align:center">0.909</td>
+<td style="text-align:center">0.342</td>
+<td style="text-align:center">0.274</td>
+<td style="text-align:center">0.012</td>
+<td style="text-align:center">93%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">ST</td>
+<td style="text-align:center">0.801</td>
+<td style="text-align:center">0.860</td>
+<td style="text-align:center">0.658</td>
+<td style="text-align:center">0.040</td>
+<td style="text-align:center">67%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">SN</td>
+<td style="text-align:center">0.882</td>
+<td style="text-align:center">0.414</td>
+<td style="text-align:center">0.330</td>
+<td style="text-align:center">0.012</td>
+<td style="text-align:center">93%</td>
+</tr>
+</tbody>
+</table>
+<h4 id="model-c--时变-μ--re_spread">Model C — 时变 μ + re_spread</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">组</th>
+<th style="text-align:center">维度</th>
+<th style="text-align:center">GOF Score</th>
+<th style="text-align:center">W1</th>
+<th style="text-align:center">QQ-MAE</th>
+<th style="text-align:center">|Mean−1|</th>
+<th style="text-align:center">LB Pass%</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">BT</td>
+<td style="text-align:center">0.822</td>
+<td style="text-align:center">0.431</td>
+<td style="text-align:center">0.371</td>
+<td style="text-align:center">0.074</td>
+<td style="text-align:center">80%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">BN</td>
+<td style="text-align:center">0.850</td>
+<td style="text-align:center">0.330</td>
+<td style="text-align:center">0.280</td>
+<td style="text-align:center">0.062</td>
+<td style="text-align:center">93%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">ST</td>
+<td style="text-align:center">0.818</td>
+<td style="text-align:center">0.468</td>
+<td style="text-align:center">0.394</td>
+<td style="text-align:center">0.074</td>
+<td style="text-align:center">80%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">SN</td>
+<td style="text-align:center">0.833</td>
+<td style="text-align:center">0.381</td>
+<td style="text-align:center">0.323</td>
+<td style="text-align:center">0.061</td>
+<td style="text-align:center">87%</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">BT</td>
+<td style="text-align:center">0.754</td>
+<td style="text-align:center">0.686</td>
+<td style="text-align:center">0.525</td>
+<td style="text-align:center">0.212</td>
+<td style="text-align:center">80%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">BN</td>
+<td style="text-align:center">0.825</td>
+<td style="text-align:center">0.431</td>
+<td style="text-align:center">0.354</td>
+<td style="text-align:center">0.159</td>
+<td style="text-align:center">80%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">ST</td>
+<td style="text-align:center">0.759</td>
+<td style="text-align:center">0.699</td>
+<td style="text-align:center">0.539</td>
+<td style="text-align:center">0.219</td>
+<td style="text-align:center">87%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">SN</td>
+<td style="text-align:center">0.795</td>
+<td style="text-align:center">0.491</td>
+<td style="text-align:center">0.395</td>
+<td style="text-align:center">0.161</td>
+<td style="text-align:center">80%</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">BT</td>
+<td style="text-align:center">0.681</td>
+<td style="text-align:center">0.978</td>
+<td style="text-align:center">0.693</td>
+<td style="text-align:center">0.340</td>
+<td style="text-align:center">80%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">BN</td>
+<td style="text-align:center">0.849</td>
+<td style="text-align:center">0.301</td>
+<td style="text-align:center">0.244</td>
+<td style="text-align:center">0.098</td>
+<td style="text-align:center">80%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">ST</td>
+<td style="text-align:center">0.661</td>
+<td style="text-align:center">1.067</td>
+<td style="text-align:center">0.763</td>
+<td style="text-align:center">0.393</td>
+<td style="text-align:center">73%</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">SN</td>
+<td style="text-align:center">0.842</td>
+<td style="text-align:center">0.377</td>
+<td style="text-align:center">0.291</td>
+<td style="text-align:center">0.102</td>
+<td style="text-align:center">87%</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3 id="日内时段效应model-b--model-c-共享">日内时段效应（Model B / Model C 共享）</h3>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi><mo>&gt;</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\gamma &gt; 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7335em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span> 表示该时段强度高于基准，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi><mo>&lt;</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\gamma &lt; 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7335em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span> 表示低于基准。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">组</th>
+<th style="text-align:center">时段</th>
+<th style="text-align:center">BT</th>
+<th style="text-align:center">BN</th>
+<th style="text-align:center">ST</th>
+<th style="text-align:center">SN</th>
+<th style="text-align:left">解读</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">开盘 (9:30–10:00)</td>
+<td style="text-align:center"><strong>+0.72</strong></td>
+<td style="text-align:center"><strong>+0.61</strong></td>
+<td style="text-align:center"><strong>+0.68</strong></td>
+<td style="text-align:center"><strong>+0.58</strong></td>
+<td style="text-align:left">开盘强度翻倍</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">午盘 (13:00–13:30)</td>
+<td style="text-align:center">−0.05</td>
+<td style="text-align:center">−0.01</td>
+<td style="text-align:center">−0.03</td>
+<td style="text-align:center">−0.03</td>
+<td style="text-align:left">午盘无显著变化</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">收盘 (14:30–15:00)</td>
+<td style="text-align:center">+0.04</td>
+<td style="text-align:center">+0.14</td>
+<td style="text-align:center">−0.01</td>
+<td style="text-align:center">+0.08</td>
+<td style="text-align:left">收盘效应弱</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">开盘</td>
+<td style="text-align:center"><strong>+0.74</strong></td>
+<td style="text-align:center"><strong>+0.57</strong></td>
+<td style="text-align:center"><strong>+0.78</strong></td>
+<td style="text-align:center"><strong>+0.52</strong></td>
+<td style="text-align:left">开盘强度翻倍</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">午盘</td>
+<td style="text-align:center">+0.03</td>
+<td style="text-align:center">+0.01</td>
+<td style="text-align:center">−0.05</td>
+<td style="text-align:center">+0.01</td>
+<td style="text-align:left">午盘无显著变化</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">收盘</td>
+<td style="text-align:center">−0.03</td>
+<td style="text-align:center">+0.13</td>
+<td style="text-align:center">+0.02</td>
+<td style="text-align:center">+0.06</td>
+<td style="text-align:left">BN 收盘略升</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">开盘</td>
+<td style="text-align:center"><strong>+0.75</strong></td>
+<td style="text-align:center"><strong>+0.30</strong></td>
+<td style="text-align:center"><strong>+0.91</strong></td>
+<td style="text-align:center"><strong>+0.39</strong></td>
+<td style="text-align:left">ST 开盘效应最强</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">午盘</td>
+<td style="text-align:center">−0.01</td>
+<td style="text-align:center">+0.01</td>
+<td style="text-align:center">−0.08</td>
+<td style="text-align:center">−0.02</td>
+<td style="text-align:left">午盘无显著变化</td>
+</tr>
+<tr>
+<td style="text-align:center"></td>
+<td style="text-align:center">收盘</td>
+<td style="text-align:center">−0.06</td>
+<td style="text-align:center">+0.18</td>
+<td style="text-align:center">−0.13</td>
+<td style="text-align:center">+0.12</td>
+<td style="text-align:left">Toxic 收盘降低</td>
+</tr>
+</tbody>
+</table>
+<p><strong>规律</strong>：</p>
+<ul>
+<li><strong>开盘效应一致且显著</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>open</mtext></msub><mo>≈</mo><mn>0.3</mn><mo>∼</mo><mn>0.9</mn></mrow><annotation encoding="application/x-tex">\gamma_{\text{open}} \approx 0.3 \sim 0.9</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7692em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">open</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.3</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.9</span></span></span></span>，即开盘 30 分钟强度为基准的 1.3~2.5 倍</li>
+<li><strong>午盘效应接近零</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><msub><mi>γ</mi><mtext>mid</mtext></msub><mi mathvariant="normal">∣</mi><mo>&lt;</mo><mn>0.1</mn></mrow><annotation encoding="application/x-tex">|\gamma_{\text{mid}}| &lt; 0.1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mid</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.1</span></span></span></span>，午盘开盘无特殊冲击</li>
+<li><strong>收盘效应弱且分化</strong>：Non-Toxic 维度略升，Toxic 维度在低价股中略降</li>
+<li><strong>低价股的 Toxic 维度开盘效应最强</strong>（ST: +0.91），反映低价股开盘时卖方有毒订单激增</li>
+</ul>
+<hr>
+<h3 id="外生项-γ_spread-分析仅-model-c">外生项 γ_spread 分析（仅 Model C）</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">组</th>
+<th style="text-align:center">γ_BT</th>
+<th style="text-align:center">γ_BN</th>
+<th style="text-align:center">γ_ST</th>
+<th style="text-align:center">γ_SN</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">16.1 ± 18.9</td>
+<td style="text-align:center">40.9 ± 76.1</td>
+<td style="text-align:center">19.5 ± 27.9</td>
+<td style="text-align:center">43.5 ± 98.3</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">73.2 ± 48.9</td>
+<td style="text-align:center">95.8 ± 74.1</td>
+<td style="text-align:center">79.4 ± 55.7</td>
+<td style="text-align:center">127.0 ± 155.9</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">177.3 ± 179.4</td>
+<td style="text-align:center">454.8 ± 328.4</td>
+<td style="text-align:center">107.7 ± 73.8</td>
+<td style="text-align:center">644.8 ± 351.2</td>
+</tr>
+</tbody>
+</table>
+<p><strong>发现</strong>：</p>
+<ul>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 随价格降低 <strong>数量级增大</strong>（High ~20 → Low ~300），低价股对价差变化极度敏感</li>
+<li>Non-Toxic 维度 (BN/SN) 的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 普遍大于 Toxic 维度 (BT/ST)</li>
+<li>Low Price 组标准差极大（如 SN: 644.8 ± 351.2），个股异质性显著</li>
+<li><strong>注意</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 的巨大波动是 Model C 在低价股 GOF 下降的主要原因之一</li>
+</ul>
+<hr>
+<h3 id="激励矩阵-a-结构model-b-组均值">激励矩阵 A 结构（Model B 组均值）</h3>
+<p><strong>High Price 组</strong>：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:center"></th>
+<th style="text-align:center">→ BT</th>
+<th style="text-align:center">→ BN</th>
+<th style="text-align:center">→ ST</th>
+<th style="text-align:center">→ SN</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>BT →</strong></td>
+<td style="text-align:center"><strong>0.885</strong></td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.003</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>BN →</strong></td>
+<td style="text-align:center">0.014</td>
+<td style="text-align:center"><strong>0.829</strong></td>
+<td style="text-align:center">0.003</td>
+<td style="text-align:center">0.000</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>ST →</strong></td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.003</td>
+<td style="text-align:center"><strong>0.885</strong></td>
+<td style="text-align:center">0.002</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>SN →</strong></td>
+<td style="text-align:center">0.002</td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.018</td>
+<td style="text-align:center"><strong>0.850</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Mid Price 组</strong>：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:center"></th>
+<th style="text-align:center">→ BT</th>
+<th style="text-align:center">→ BN</th>
+<th style="text-align:center">→ ST</th>
+<th style="text-align:center">→ SN</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>BT →</strong></td>
+<td style="text-align:center"><strong>0.942</strong></td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.002</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>BN →</strong></td>
+<td style="text-align:center">0.014</td>
+<td style="text-align:center"><strong>0.892</strong></td>
+<td style="text-align:center">0.001</td>
+<td style="text-align:center">0.000</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>ST →</strong></td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.002</td>
+<td style="text-align:center"><strong>0.923</strong></td>
+<td style="text-align:center">0.000</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>SN →</strong></td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.024</td>
+<td style="text-align:center"><strong>0.902</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Low Price 组</strong>：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:center"></th>
+<th style="text-align:center">→ BT</th>
+<th style="text-align:center">→ BN</th>
+<th style="text-align:center">→ ST</th>
+<th style="text-align:center">→ SN</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>BT →</strong></td>
+<td style="text-align:center"><strong>0.967</strong></td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.000</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>BN →</strong></td>
+<td style="text-align:center">0.004</td>
+<td style="text-align:center"><strong>0.881</strong></td>
+<td style="text-align:center">0.001</td>
+<td style="text-align:center">0.000</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>ST →</strong></td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.001</td>
+<td style="text-align:center"><strong>0.964</strong></td>
+<td style="text-align:center">0.000</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>SN →</strong></td>
+<td style="text-align:center">0.000</td>
+<td style="text-align:center">0.001</td>
+<td style="text-align:center">0.013</td>
+<td style="text-align:center"><strong>0.914</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>结构特征</strong>：</p>
+<ul>
+<li><strong>对角线主导</strong>：自激励远强于交叉激励（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mrow><mi>i</mi><mi>i</mi></mrow></msub><mo>≫</mo><msub><mi>A</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo separator="true">,</mo><mi>i</mi><mo mathvariant="normal">≠</mo><mi>j</mi></mrow><annotation encoding="application/x-tex">A_{ii} \gg A_{ij}, i \neq j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ii</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≫</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">i</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel"><span class="mrel"><span class="mord vbox"><span class="thinbox"><span class="rlap"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="inner"><span class="mord"><span class="mrel"></span></span></span><span class="fix"></span></span></span></span></span><span class="mrel">=</span></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05724em;">j</span></span></span></span>）</li>
+<li><strong>Toxic 维度自激励更强</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mtext>BT,BT</mtext></msub><mo>&gt;</mo><msub><mi>A</mi><mtext>BN,BN</mtext></msub></mrow><annotation encoding="application/x-tex">A_{\text{BT,BT}} &gt; A_{\text{BN,BN}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">BT,BT</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">BN,BN</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mtext>ST,ST</mtext></msub><mo>&gt;</mo><msub><mi>A</mi><mtext>SN,SN</mtext></msub></mrow><annotation encoding="application/x-tex">A_{\text{ST,ST}} &gt; A_{\text{SN,SN}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ST,ST</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">SN,SN</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></li>
+<li><strong>低价股自激励更强</strong>：Low 组对角线值 &gt; Mid &gt; High</li>
+<li><strong>微弱的交叉激励</strong>：SN → ST 存在约 0.01~0.02 的交叉效应，其余交叉项接近零</li>
+</ul>
+<hr>
+<h3 id="基线强度-μ-组均值model-b">基线强度 μ 组均值（Model B）</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">组</th>
+<th style="text-align:center">μ_BT</th>
+<th style="text-align:center">μ_BN</th>
+<th style="text-align:center">μ_ST</th>
+<th style="text-align:center">μ_SN</th>
+<th style="text-align:left">特征</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">0.054 ± 0.027</td>
+<td style="text-align:center">0.083 ± 0.038</td>
+<td style="text-align:center">0.051 ± 0.020</td>
+<td style="text-align:center">0.069 ± 0.018</td>
+<td style="text-align:left">BN &gt; SN &gt; BT ≈ ST</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">0.057 ± 0.056</td>
+<td style="text-align:center">0.095 ± 0.058</td>
+<td style="text-align:center">0.066 ± 0.059</td>
+<td style="text-align:center">0.086 ± 0.052</td>
+<td style="text-align:left">BN &gt; SN &gt; ST &gt; BT</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">0.012 ± 0.013</td>
+<td style="text-align:center">0.070 ± 0.016</td>
+<td style="text-align:center">0.011 ± 0.013</td>
+<td style="text-align:center">0.051 ± 0.022</td>
+<td style="text-align:left">BN ≫ SN ≫ BT ≈ ST</td>
+</tr>
+</tbody>
+</table>
+<p><strong>解读</strong>：</p>
+<ul>
+<li><strong>Non-Toxic 维度的背景强度远高于 Toxic 维度</strong>：μ_BN/μ_SN 约为 μ_BT/μ_ST 的 1.5~6 倍，说明无毒订单的&quot;自发到达&quot;更频繁</li>
+<li><strong>低价股的 Toxic 背景强度极低</strong>（μ_BT ≈ μ_ST ≈ 0.01），有毒订单几乎完全由自激励驱动而非背景到达</li>
+<li><strong>高价股各维度背景强度更均衡</strong>，反映其订单簿流动性更好</li>
+</ul>
+<h3 id="aic-对比model-b">AIC 对比（Model B）</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">组</th>
+<th style="text-align:center">AIC (mean ± std)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:center">−29.7 ± 37.8</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Mid</strong></td>
+<td style="text-align:center">−83.4 ± 60.2</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:center">−92.8 ± 41.7</td>
+</tr>
+</tbody>
+</table>
+<p>AIC 越小越好。Low Price 组的 AIC 最低，说明尽管 GOF 残差偏差较大，模型在似然意义上对低价股的拟合仍然较好（事件数量更多，似然值更高）。</p>
+<hr>
+<h2 id="综合结论">综合结论</h2>
+<h3 id="三种模型的优劣总结">三种模型的优劣总结</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">维度</th>
+<th style="text-align:left">Model A (常数 μ)</th>
+<th style="text-align:left">Model B (时变 μ)</th>
+<th style="text-align:left">Model C (+exog)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>复杂度</strong></td>
+<td style="text-align:left">最低（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>μ</mi><mo separator="true">,</mo><mi>A</mi><mo separator="true">,</mo><mi>β</mi></mrow><annotation encoding="application/x-tex">\mu, A, \beta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">μ</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">A</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span></span></span></span>）</td>
+<td style="text-align:left">中等（+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>open/mid/close</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{open/mid/close}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7858em;vertical-align:-0.3552em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.5198em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">open/mid/close</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3552em;"><span></span></span></span></span></span></span></span></span></span>）</td>
+<td style="text-align:left">最高（+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>）</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>GOF 评分</strong></td>
+<td style="text-align:left">0.851</td>
+<td style="text-align:left"><strong>0.854</strong> (最优)</td>
+<td style="text-align:left">0.791</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>残差均值偏差</strong></td>
+<td style="text-align:left"><strong>0.021</strong> (最优)</td>
+<td style="text-align:left">0.021</td>
+<td style="text-align:left">0.163</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Wasserstein-1</strong></td>
+<td style="text-align:left"><strong>0.510</strong></td>
+<td style="text-align:left">0.506</td>
+<td style="text-align:left">0.553</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>独立性 (LB)</strong></td>
+<td style="text-align:left">85%</td>
+<td style="text-align:left"><strong>88%</strong> (最优)</td>
+<td style="text-align:left">82%</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>参数可解释性</strong></td>
+<td style="text-align:left">高</td>
+<td style="text-align:left">高</td>
+<td style="text-align:left">中（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 波动大）</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>适用场景</strong></td>
+<td style="text-align:left">基准对比</td>
+<td style="text-align:left"><strong>推荐默认选择</strong></td>
+<td style="text-align:left">需要微观结构分析时</td>
+</tr>
+</tbody>
+</table>
+<h3 id="核心发现">核心发现</h3>
+<ol>
+<li>
+<p><strong>Model B（时变 μ）是最佳平衡点</strong>：在几乎不增加计算成本的前提下，通过日内时段效应校正获得了最优的 GOF 评分和独立性检验通过率</p>
+</li>
+<li>
+<p><strong>Model C 的外生项引入了过拟合风险</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 在低价股中波动极大（CV &gt; 100%），导致 GOF 反而下降。但 Model C 揭示了重要的经济学含义——低价股对价差变化的敏感度远高于高价股</p>
+</li>
+<li>
+<p><strong>价格效应是最稳健的发现</strong>：三种模型一致显示：</p>
+<ul>
+<li>分枝比：High (0.90) &lt; Mid (0.94) &lt; Low (0.97)</li>
+<li>GOF：High &gt; Mid &gt; Low</li>
+<li>Toxic 维度拟合难度 &gt; Non-Toxic 维度</li>
+</ul>
+</li>
+<li>
+<p><strong>开盘效应是最显著的日内结构</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>open</mtext></msub><mo>≈</mo><mn>0.5</mn><mo>∼</mo><mn>0.9</mn></mrow><annotation encoding="application/x-tex">\gamma_{\text{open}} \approx 0.5 \sim 0.9</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7692em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">open</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.5</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.9</span></span></span></span>，开盘 30 分钟的事件强度约为基准的 1.5~2.5 倍</p>
+</li>
+</ol>
+<hr>
+<h2 id="经济学解读">经济学解读</h2>
+<h3 id="一订单流自激励与市场微观结构">一、订单流自激励与市场微观结构</h3>
+<h4 id="1-有毒订单的传染性远强于无毒订单">1. 有毒订单的&quot;传染性&quot;远强于无毒订单</h4>
+<p>三种模型一致显示，<strong>Toxic 维度（BT/ST）的自激励系数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mrow><mi>i</mi><mi>i</mi></mrow></msub></mrow><annotation encoding="application/x-tex">A_{ii}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ii</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 显著高于 Non-Toxic 维度（BN/SN）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">价格组</th>
+<th style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mtext>BT,BT</mtext></msub></mrow><annotation encoding="application/x-tex">A_{\text{BT,BT}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">BT,BT</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></th>
+<th style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mtext>BN,BN</mtext></msub></mrow><annotation encoding="application/x-tex">A_{\text{BN,BN}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">BN,BN</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></th>
+<th style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mtext>ST,ST</mtext></msub></mrow><annotation encoding="application/x-tex">A_{\text{ST,ST}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ST,ST</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></th>
+<th style="text-align:center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mtext>SN,SN</mtext></msub></mrow><annotation encoding="application/x-tex">A_{\text{SN,SN}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">SN,SN</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">High</td>
+<td style="text-align:center">0.885</td>
+<td style="text-align:center">0.829</td>
+<td style="text-align:center">0.885</td>
+<td style="text-align:center">0.850</td>
+</tr>
+<tr>
+<td style="text-align:center">Mid</td>
+<td style="text-align:center">0.942</td>
+<td style="text-align:center">0.892</td>
+<td style="text-align:center">0.923</td>
+<td style="text-align:center">0.902</td>
+</tr>
+<tr>
+<td style="text-align:center">Low</td>
+<td style="text-align:center">0.967</td>
+<td style="text-align:center">0.881</td>
+<td style="text-align:center">0.964</td>
+<td style="text-align:center">0.914</td>
+</tr>
+</tbody>
+</table>
+<p><strong>经济学含义</strong>：有毒订单（informed trading）具有更强的&quot;传染效应&quot;——一笔有毒订单的出现会显著提高后续有毒订单到达的概率。这与市场微观结构理论一致：知情交易者倾向于在信息优势消散前集中下单（strategic order splitting），形成订单簇聚（order clustering）。相比之下，无毒订单（liquidity provision）的自激励较弱，反映流动性提供者的行为更加分散和随机。</p>
+<h4 id="2-低价股的自激励陷阱">2. 低价股的&quot;自激励陷阱&quot;</h4>
+<p>分枝比随价格降低单调递增（High 0.90 → Mid 0.94 → Low 0.97），且低价股的 Toxic 自激励接近临界值（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mtext>BT,BT</mtext></msub><mo>=</mo><mn>0.967</mn></mrow><annotation encoding="application/x-tex">A_{\text{BT,BT}} = 0.967</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">BT,BT</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.967</span></span></span></span>）。</p>
+<p><strong>经济学含义</strong>：</p>
+<ul>
+<li><strong>流动性差异</strong>：低价股的订单簿深度浅、买卖价差大，单笔订单对价格的冲击更大，从而触发更多的跟随订单（momentum trading / herding）</li>
+<li><strong>信息不对称更严重</strong>：低价股的分析师覆盖少、信息透明度低，知情交易者的信息优势更持久，导致有毒订单的连锁反应更强</li>
+<li><strong>接近临界态</strong>：分枝比 0.97 意味着系统接近不稳定边界（BR = 1），一个微小的外部冲击就可能引发长时间的订单簇聚，这与低价股常见的&quot;闪崩&quot;现象一致</li>
+</ul>
+<h4 id="3-背景强度-μ-揭示的流动性结构">3. 背景强度 μ 揭示的流动性结构</h4>
+<p>低价股的 Toxic 背景强度极低（μ_BT ≈ μ_ST ≈ 0.01），而 Non-Toxic 背景强度相对正常（μ_BN ≈ 0.07）。</p>
+<p><strong>经济学含义</strong>：</p>
+<ul>
+<li>低价股中，有毒订单几乎 <strong>不存在&quot;自发到达&quot;</strong>，而是完全由自激励机制驱动——即有毒订单只在已有有毒订单出现后才会跟随出现</li>
+<li>这意味着低价股的知情交易具有 <strong>高度事件驱动</strong> 的特征：一旦某个信息事件触发第一笔有毒订单，后续订单会以极高的自激励强度（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mrow><mi>i</mi><mi>i</mi></mrow></msub><mo>&gt;</mo><mn>0.96</mn></mrow><annotation encoding="application/x-tex">A_{ii} &gt; 0.96</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ii</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.96</span></span></span></span>）持续涌入</li>
+<li>高价股的 μ 更均衡（Toxic 与 Non-Toxic 差距较小），反映其订单簿生态更健康，知情与非知情交易者共存</li>
+</ul>
+<h3 id="二日内时段效应的市场行为解读">二、日内时段效应的市场行为解读</h3>
+<h4 id="1-开盘效应信息释放与流动性竞争">1. 开盘效应：信息释放与流动性竞争</h4>
+<p>开盘 30 分钟（9:30–10:00）的强度放大因子 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>open</mtext></msub><mo>≈</mo><mn>0.5</mn><mo>∼</mo><mn>0.9</mn></mrow><annotation encoding="application/x-tex">\gamma_{\text{open}} \approx 0.5 \sim 0.9</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7692em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">open</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.5</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.9</span></span></span></span>，即事件到达率为基准的 <strong>1.5~2.5 倍</strong>。</p>
+<p><strong>经济学含义</strong>：</p>
+<ul>
+<li><strong>隔夜信息消化</strong>：A 股实行 T+1 交易制度，隔夜积累的信息（公告、海外市场变动等）在开盘时集中释放，导致知情交易者和流动性提供者同时涌入</li>
+<li><strong>价格发现集中期</strong>：开盘阶段是价格发现最活跃的时段，买卖双方的有毒和无毒订单都显著增加</li>
+<li><strong>低价股 ST 开盘效应最强</strong>（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>open</mtext></msub><mo>=</mo><mn>0.91</mn></mrow><annotation encoding="application/x-tex">\gamma_{\text{open}} = 0.91</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">open</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.91</span></span></span></span>）：低价股的卖方有毒订单在开盘时激增，可能反映了机构投资者利用隔夜信息进行的集中抛售</li>
+</ul>
+<h4 id="2-午盘效应接近零市场的午休惯性">2. 午盘效应接近零：市场的&quot;午休惯性&quot;</h4>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><msub><mi>γ</mi><mtext>mid</mtext></msub><mi mathvariant="normal">∣</mi><mo>&lt;</mo><mn>0.1</mn></mrow><annotation encoding="application/x-tex">|\gamma_{\text{mid}}| &lt; 0.1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mid</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.1</span></span></span></span>，午盘开盘（13:00–13:30）几乎没有额外的强度变化。</p>
+<p><strong>经济学含义</strong>：与欧美市场的连续交易不同，A 股的午间休市（11:30–13:00）并未造成显著的信息积累。午盘开盘时的订单流模式与日内基准无异，说明 <strong>1.5 小时的午休不足以产生类似隔夜的信息冲击</strong>。</p>
+<h4 id="3-收盘效应的分化non-toxic-略升toxic-略降">3. 收盘效应的分化：Non-Toxic 略升，Toxic 略降</h4>
+<p>收盘前 30 分钟（14:30–15:00），Non-Toxic 维度的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>close</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{close}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">close</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 略为正值（+0.08~+0.18），而 Toxic 维度在低价股中为负值（−0.06~−0.13）。</p>
+<p><strong>经济学含义</strong>：</p>
+<ul>
+<li><strong>流动性提供者的收盘效应</strong>：做市商和被动投资者倾向于在收盘前调整持仓（rebalancing），导致无毒订单略增</li>
+<li><strong>知情交易者的收盘回避</strong>：有毒订单在收盘前减少，可能因为 (a) 知情交易者已在日内完成交易，(b) 收盘前的监管关注度更高（如异常交易监控），(c) T+1 制度下收盘前建仓的风险更大</li>
+</ul>
+<h3 id="三价差外生项的经济学意义">三、价差外生项的经济学意义</h3>
+<h4 id="re_spread-对不同价格水平股票的差异化影响">re_spread 对不同价格水平股票的差异化影响</h4>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 从 High 组的 ~20 增长到 Low 组的 ~300，增幅超过 <strong>10 倍</strong>。</p>
+<p><strong>经济学含义</strong>：</p>
+<ul>
+<li><strong>价差是低价股订单流的核心驱动因素</strong>：低价股的买卖价差占股价比例更高（相对价差更大），价差的微小变化就会显著改变交易成本，从而触发大量订单</li>
+<li><strong>Non-Toxic 维度对价差更敏感</strong>（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>BN</mtext></msub><mo>&gt;</mo><msub><mi>γ</mi><mtext>BT</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{BN}} &gt; \gamma_{\text{BT}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7335em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">BN</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">BT</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>SN</mtext></msub><mo>&gt;</mo><msub><mi>γ</mi><mtext>ST</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{SN}} &gt; \gamma_{\text{ST}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7335em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">SN</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ST</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>）：流动性提供者（做市商、被动投资者）对交易成本变化更敏感，价差收窄时会积极提供流动性，价差扩大时则撤回</li>
+<li><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 的高波动性</strong>（Low 组 CV &gt; 100%）反映了低价股之间的巨大异质性：部分低价股（如银行股 601398）的订单流高度依赖价差变化，而另一些（如 601319）则不然</li>
+</ul>
+<h4 id="模型选择的实践启示">模型选择的实践启示</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">应用场景</th>
+<th style="text-align:left">推荐模型</th>
+<th style="text-align:left">理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>订单流预测</strong></td>
+<td style="text-align:left">Model B</td>
+<td style="text-align:left">GOF 最优，参数稳定，计算快</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>交易成本分析（TCA）</strong></td>
+<td style="text-align:left">Model C</td>
+<td style="text-align:left">需要 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>γ</mi><mtext>spread</mtext></msub></mrow><annotation encoding="application/x-tex">\gamma_{\text{spread}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0556em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">spread</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 量化价差对订单流的影响</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>市场监控/异常检测</strong></td>
+<td style="text-align:left">Model A</td>
+<td style="text-align:left">最简洁，分枝比直接反映自激励强度</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>做市策略优化</strong></td>
+<td style="text-align:left">Model C</td>
+<td style="text-align:left">需要同时考虑日内时段和价差效应</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>学术研究/基准对比</strong></td>
+<td style="text-align:left">Model A + B</td>
+<td style="text-align:left">递进对比，展示模型复杂度的边际贡献</td>
+</tr>
+</tbody>
+</table>
+<h3 id="四研究局限与未来方向">四、研究局限与未来方向</h3>
+<ol>
+<li><strong>样本期较短</strong>：仅使用 2019 年 12 月数据，结论的时间稳健性有待验证</li>
+<li><strong>衰减参数固定</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi></mrow><annotation encoding="application/x-tex">\beta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span></span></span></span> 通过网格搜索选取但在组内固定，未来可考虑个股级别的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi></mrow><annotation encoding="application/x-tex">\beta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span></span></span></span> 估计</li>
+<li><strong>交叉激励稀疏</strong>：当前模型中交叉激励项接近零，可能是因为 4 维模型的参数空间过大，未来可尝试结构化约束（如对称性、稀疏性先验）</li>
+<li><strong>外生变量选择</strong>：仅使用 re_spread 作为外生项，未来可引入更多微观结构变量（如订单簿不平衡 OBI、对手方深度 log_opp_depth 等，数据中已包含这些字段）</li>
+<li><strong>非参数基线</strong>：日内时段效应使用分段常数近似，未来可考虑核平滑或样条基线</li>
+</ol>
+<hr>
+<h2 id="目录结构">目录结构</h2>
+<pre><code class="language-text">full_test/
+├─ hawkes_4d_tick.py              # 4D Hawkes 核心：Model A + Model B 的拟合与 GOF v2
+├─ hawkes_4d_tick_exog.py         # 4D Hawkes 核心：Model C（含 re_spread 外生项）
+├─ fit_price_groups_4d_noexog.py  # 批量拟合 Model A（常数 μ）+ 可视化
+├─ fit_price_groups_4d.py         # 批量拟合 Model B（时变 μ）+ 可视化
+├─ fit_price_groups_4d_exog.py    # 批量拟合 Model C（时变 μ + exog）+ 可视化
+├─ fit_toxic_events.py            # 1D Toxic 事件批量建模
+├─ full_vs_simple_1d.py           # 1D 拟合与统一验证
+├─ simulate_and_fit_1d.py         # 1D 仿真 → 拟合入口
+├─ mhp.py                         # 1D 简易模拟器
+├─ data/
+│  ├─ high_price_events/          # 高价组 15 只股票事件数据
+│  ├─ mid_price_events/           # 中价组 15 只股票事件数据
+│  └─ low_price_events/           # 低价组 15 只股票事件数据
+├─ results_noexog/                # Model A 输出
+│  ├─ high_price_4d_noexog/       #   高价组各股票结果 + summary
+│  ├─ mid_price_4d_noexog/        #   中价组
+│  └─ low_price_4d_noexog/        #   低价组
+├─ results/                       # Model B 输出
+│  ├─ high_price_4d/              #   高价组各股票结果 + summary
+│  ├─ mid_price_4d/               #   中价组
+│  ├─ low_price_4d/               #   低价组
+│  └─ price_groups_comparison.json
+└─ results_exog/                  # Model C 输出
+   ├─ high_price_4d_exog/         #   高价组各股票结果 + summary
+   ├─ mid_price_4d_exog/          #   中价组
+   ├─ low_price_4d_exog/          #   低价组
+   └─ price_groups_comparison_exog.json
+</code></pre>
+<hr>
+<h2 id="运行方式">运行方式</h2>
+<pre><code class="language-powershell">conda activate py385
+
+<span class="hljs-comment"># Model A — 常数 μ（无外生项）</span>
+python fit_price_groups_4d_noexog.py
+
+<span class="hljs-comment"># Model B — 时变 μ（日内时段效应）</span>
+python fit_price_groups_4d.py
+
+<span class="hljs-comment"># Model C — 时变 μ + re_spread 外生项</span>
+python fit_price_groups_4d_exog.py
+</code></pre>
+<hr>
+<h2 id="可视化输出">可视化输出</h2>
+<p>每种模型运行后在对应目录生成以下图表：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">文件名</th>
+<th style="text-align:left">内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><code>gof_qq_plots.png</code></td>
+<td style="text-align:left">3 组 × 4 维 QQ-Exp(1) 诊断图，带 IQR 带和距离度量标注</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>distance_metrics_heatmap.png</code></td>
+<td style="text-align:left">Wasserstein / QQ-MAE / |Mean−1| 热力图</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>acf_independence_panel.png</code></td>
+<td style="text-align:left">3 组 × 4 维 ACF 柱状图 + Ljung-Box p-value</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>gof_score_comparison.png</code></td>
+<td style="text-align:left">GOF 综合评分箱线图 + 多指标雷达图</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>gof_summary_dashboard.png</code></td>
+<td style="text-align:left">残差均值箱线图 + 股票级 GOF 评分热力图</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>excitation_matrix_heatmaps.png</code></td>
+<td style="text-align:left">激励矩阵 A 的组均值热力图</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>branching_ratio_boxplot.png</code></td>
+<td style="text-align:left">分枝比分布箱线图</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>gamma_spread_comparison.png</code></td>
+<td style="text-align:left">γ_spread 外生项系数组间对比（仅 Model C）</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="环境与依赖">环境与依赖</h2>
+<ul>
+<li>Python 3.8.5+</li>
+<li>依赖包：<code>numpy</code>, <code>scipy</code>, <code>matplotlib</code>, <code>statsmodels</code>, <code>tick</code></li>
+</ul>
+<pre><code class="language-powershell">conda create <span class="hljs-literal">-n</span> py385 python=<span class="hljs-number">3.8</span>.<span class="hljs-number">5</span>
+conda activate py385
+pip install numpy scipy matplotlib statsmodels tick
+</code></pre>
+<hr>
+<h2 id="参考">参考</h2>
+<ul>
+<li><code>tick</code>（Hawkes 建模工具包）：<a href="https://x-datainitiative.github.io/tick/">https://x-datainitiative.github.io/tick/</a></li>
+<li>Hawkes, A. G. (1971). Spectra of some self-exciting and mutually exciting point processes. <em>Biometrika</em>, 58(1), 83–90.</li>
+<li>Bacry, E., Mastromatteo, I., &amp; Muzy, J. F. (2015). Hawkes processes in finance. <em>Market Microstructure and Liquidity</em>, 1(01).</li>
+</ul>
+
+            <script async src="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.js"></script>
+            
+        </body>
+        </html>
