@@ -1,0 +1,38 @@
+{
+  "high": {
+    "n_stocks": 15,
+    "n_successful": 15,
+    "branching_ratio_mean": 0.8998392840756464,
+    "branching_ratio_std": 0.03692481961028159,
+    "decay_mean": 10.0,
+    "stable_ratio": 1.0,
+    "gof_pass_ratio": 0.6,
+    "gof_score_mean": 0.8620315812196074,
+    "wasserstein_mean": 0.3997661317716271,
+    "qq_mae_mean": 0.34210595370689867
+  },
+  "mid": {
+    "n_stocks": 15,
+    "n_successful": 15,
+    "branching_ratio_mean": 0.9436127057016067,
+    "branching_ratio_std": 0.020019465165846916,
+    "decay_mean": 10.0,
+    "stable_ratio": 1.0,
+    "gof_pass_ratio": 0.5333333333333333,
+    "gof_score_mean": 0.8470889206305756,
+    "wasserstein_mean": 0.5180438305854944,
+    "qq_mae_mean": 0.4309034995060047
+  },
+  "low": {
+    "n_stocks": 15,
+    "n_successful": 15,
+    "branching_ratio_mean": 0.9686564099216773,
+    "branching_ratio_std": 0.008810491250171228,
+    "decay_mean": 10.0,
+    "stable_ratio": 1.0,
+    "gof_pass_ratio": 0.5333333333333333,
+    "gof_score_mean": 0.8533808574085539,
+    "wasserstein_mean": 0.6011495289646293,
+    "qq_mae_mean": 0.4711039813404668
+  }
+}

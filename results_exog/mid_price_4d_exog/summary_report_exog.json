@@ -1,0 +1,102 @@
+{
+  "group": "mid",
+  "summary": {
+    "total_stocks": 15,
+    "successful_fits": 15,
+    "failed_fits": 0
+  },
+  "branching_ratio": {
+    "mean": 0.931445853819522,
+    "std": 0.02056717227343453,
+    "min": 0.8956391851019819,
+    "max": 0.967014489854262,
+    "median": 0.9305876672910879,
+    "stable_count": 15
+  },
+  "decay": {
+    "mean": 50.0,
+    "std": 0.0,
+    "min": 50.0,
+    "max": 50.0
+  },
+  "gof": {
+    "mean_pass_count": 2.533333333333333,
+    "all_pass_count": 5,
+    "gof_score_mean": 0.783407052347912,
+    "model_type": "constant_mu_per_day",
+    "dim_0_gof_score_mean": 0.7538468028839524,
+    "dim_0_wasserstein_mean": 0.6860563661564735,
+    "dim_0_qq_mae_mean": 0.5250685436092111,
+    "dim_0_mae_mean_mean": 0.21222102669550486,
+    "dim_0_ljung_box_pass_ratio": 0.8,
+    "dim_0_per_day_not_reject_ratio_mean": 0.0,
+    "dim_1_gof_score_mean": 0.8253809749494067,
+    "dim_1_wasserstein_mean": 0.4307241304743535,
+    "dim_1_qq_mae_mean": 0.35434436385500984,
+    "dim_1_mae_mean_mean": 0.15921782574301516,
+    "dim_1_ljung_box_pass_ratio": 0.8,
+    "dim_1_per_day_not_reject_ratio_mean": 0.0,
+    "dim_2_gof_score_mean": 0.7589469845245284,
+    "dim_2_wasserstein_mean": 0.6985837093794162,
+    "dim_2_qq_mae_mean": 0.5389367307017455,
+    "dim_2_mae_mean_mean": 0.21935581111143498,
+    "dim_2_ljung_box_pass_ratio": 0.8666666666666667,
+    "dim_2_per_day_not_reject_ratio_mean": 0.0,
+    "dim_3_gof_score_mean": 0.7954534470337611,
+    "dim_3_wasserstein_mean": 0.4907487986458466,
+    "dim_3_qq_mae_mean": 0.39505598138169545,
+    "dim_3_mae_mean_mean": 0.1606656226873546,
+    "dim_3_ljung_box_pass_ratio": 0.8,
+    "dim_3_per_day_not_reject_ratio_mean": 0.0,
+    "gamma_open_mean": [
+      0.7402708706547095,
+      0.5671038886793592,
+      0.7844175832721075,
+      0.5208025079620042
+    ],
+    "gamma_open_std": [
+      0.11221562751953132,
+      0.17314768220897198,
+      0.12329445213251788,
+      0.1966650829830459
+    ],
+    "gamma_mid_mean": [
+      0.025738969592519083,
+      0.0062090286288799664,
+      -0.04705443759372033,
+      0.006407529846640049
+    ],
+    "gamma_mid_std": [
+      0.1475793571934365,
+      0.1148418436545833,
+      0.17270250267080814,
+      0.11748309967127311
+    ],
+    "gamma_close_mean": [
+      -0.03006267717025706,
+      0.13407325585762392,
+      0.021931784153832443,
+      0.05835202741587626
+    ],
+    "gamma_close_std": [
+      0.1463857160833003,
+      0.08809240892521089,
+      0.13529535141135285,
+      0.09581779699949748
+    ]
+  },
+  "gamma_spread": {
+    "mean": [
+      73.15862524133686,
+      95.77564984730685,
+      79.40645994689855,
+      126.94371442446409
+    ],
+    "std": [
+      48.92771672831535,
+      74.07135859483374,
+      55.679132392953484,
+      155.8510077863016
+    ]
+  }
+}

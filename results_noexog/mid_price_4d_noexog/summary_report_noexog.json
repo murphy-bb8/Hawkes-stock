@@ -1,0 +1,52 @@
+{
+  "group": "mid",
+  "summary": {
+    "total_stocks": 16,
+    "successful_fits": 15,
+    "failed_fits": 1
+  },
+  "branching_ratio": {
+    "mean": 0.9436127057016067,
+    "std": 0.020019465165846916,
+    "min": 0.9130652695248006,
+    "max": 0.980147450611814,
+    "median": 0.9426425506728454,
+    "stable_count": 15
+  },
+  "decay": {
+    "mean": 10.0,
+    "std": 0.0,
+    "min": 10.0,
+    "max": 10.0
+  },
+  "gof": {
+    "mean_pass_count": 3.466666666666667,
+    "all_pass_count": 8,
+    "gof_score_mean": 0.8533961048071423,
+    "model_type": "constant_mu",
+    "dim_0_gof_score_mean": 0.8399196912826503,
+    "dim_0_wasserstein_mean": 0.6173042166634601,
+    "dim_0_qq_mae_mean": 0.49485022118853794,
+    "dim_0_mae_mean_mean": 0.028147022013784575,
+    "dim_0_ljung_box_pass_ratio": 0.9333333333333333,
+    "dim_0_per_day_not_reject_ratio_mean": 0.0,
+    "dim_1_gof_score_mean": 0.8746015174549292,
+    "dim_1_wasserstein_mean": 0.4039873024443825,
+    "dim_1_qq_mae_mean": 0.33817984814858976,
+    "dim_1_mae_mean_mean": 0.022796537440155227,
+    "dim_1_ljung_box_pass_ratio": 0.8,
+    "dim_1_per_day_not_reject_ratio_mean": 0.0,
+    "dim_2_gof_score_mean": 0.8461207253085145,
+    "dim_2_wasserstein_mean": 0.5991047404691335,
+    "dim_2_qq_mae_mean": 0.5020578659108614,
+    "dim_2_mae_mean_mean": 0.029610944027361842,
+    "dim_2_ljung_box_pass_ratio": 0.8666666666666667,
+    "dim_2_per_day_not_reject_ratio_mean": 0.0,
+    "dim_3_gof_score_mean": 0.8529424851824746,
+    "dim_3_wasserstein_mean": 0.4849898786270216,
+    "dim_3_qq_mae_mean": 0.3848329710908875,
+    "dim_3_mae_mean_mean": 0.023510533134198857,
+    "dim_3_ljung_box_pass_ratio": 0.8666666666666667,
+    "dim_3_per_day_not_reject_ratio_mean": 0.0
+  }
+}
