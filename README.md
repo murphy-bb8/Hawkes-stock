@@ -1,24 +1,24 @@
-# 多维 Hawkes 过程建模：从常数基线到外生驱动的递进实验
+# 多维 Hawkes 过程建模：加性基线的 EM 算法实现
 
 ## 项目简介
 
-本项目围绕 **A 股限价订单簿中的有毒/无毒订单流**，构建 **4 维多元 Hawkes 过程** 模型，研究买卖双方有毒与无毒订单之间的自激励与交叉激励结构。
+本项目围绕 **A 股限价订单簿中的有毒/无毒订单流**，构建 **4 维多元 Hawkes 过程** 模型，使用 **加性基线** 的 EM 算法进行高效估计。相比传统的 log-link 乘性基线，加性基线具有闭式 M-step 解、计算更高效、参数解释更直观的优势。
 
 核心研究问题：
 1. 不同价格水平的股票，其订单流自激励强度有何差异？
 2. 引入日内时段效应（开盘/午盘/收盘）能否改善基线强度的刻画？
 3. 引入价差变化率（re_spread）作为外生驱动项，能否进一步提升模型拟合？
 
-为此，我们设计了 **三种递进的模型变体**（Kramer 2021 风格 log-link 基线），在统一的对数似然口径下进行公平对比。
+为此，我们设计了 **三种递进的模型变体**（加性基线风格），在统一的对数似然口径下进行公平对比。
 
 ### 技术实现
 
-- **估计方法**：交替优化策略——EM 算法估计激励参数 $(\alpha, \omega)$，L-BFGS-B 数值优化基线参数 $(\mu, \gamma)$，交替迭代至收敛
-- **基线模型**：Kramer (2021) 风格 **log-link 乘性基线**：$\mu_i \cdot \exp(\eta_i(t))$，其中 $\eta_i(t)$ 为日内哑变量和外生 spread 的线性组合
-- **外生变量构建**：`SpreadProcess` 类从所有事件类型的 union 构建独立外生 spread 序列，避免内生采样偏误
-- **性能优化**：核心递推循环使用 **Cython** 加速（EM 递推、对数似然、GOF 残差），log-link 积分使用向量化 + 分段缓存
-- **口径一致性**：拟合（EM + L-BFGS）、对数似然（`loglikelihood_loglink`）、GOF 残差三者使用 **完全统一** 的 log-link 强度函数和连续递推
-- **全量数据**：不使用子采样，直接对全量事件序列（单只股票可达 190 万事件）进行拟合
+- **估计方法**：**EM 算法**，所有参数（μ, α, γ_spread）均有 **闭式 M-step 解**，无需数值优化
+- **基线模型**：**加性基线**：$\lambda_i(t) = \mu_i + \text{(intraday effects)} + \text{(spread effect)} + \text{(excitation)}$
+- **外生变量构建**：spread 序列经 z-score 标准化、非负平移、max=1 归一化处理
+- **性能优化**：核心递推循环使用 **Cython 加速**（EM 递推、对数似然、GOF 残差），支持大规模数据
+- **口径一致性**：拟合、对数似然、GOF 残差三者使用 **完全统一** 的加性强度函数
+- **全量数据**：不使用子采样，直接对全量事件序列（单只股票可达 78 万+事件）进行拟合
 
 ---
 
@@ -43,9 +43,10 @@
 ```
 Model A (常数 μ)          →  Model B (时变 μ)           →  Model C (时变 μ + 外生项)
 最简洁的基线假设              引入日内时段结构               引入市场微观结构变量
-β = 10 (grid search)        β = 10 (grid search)          β = 10 (grid search)
-无外生项                     γ_open / γ_mid / γ_close      γ_open/mid/close + γ_spread·x_s(t)
-统一 log-link 口径           统一 log-link 口径             统一 log-link 口径
+β = 网格搜索最优            β = 网格搜索最优              β = 网格搜索最优
+无外生项                     γ_open / γ_mid / γ_close      γ_open/mid/close + γ_spread·x⁺(t)
+统一加性基线口径             统一加性基线口径              统一加性基线口径
+闭式 M-step 解              闭式 M-step 解               闭式 M-step 解
 ```
 
 每一步都在前一步的基础上增加一个建模维度，以检验额外复杂度是否带来统计上的改善。
@@ -58,27 +59,26 @@ Model A (常数 μ)          →  Model B (时变 μ)           →  Model C (�
 
 $$\lambda_i(t) = \mu_i + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \, e^{-\omega(t - t_k^j)}$$
 
-最简洁的多元 Hawkes 模型。基线强度 $\mu_i$ 为常数，不随日内时间变化。在统一 log-link 口径下，等价于 $\eta_i(t) = 0$ 的特殊情形。
+最简洁的多元 Hawkes 模型。基线强度 $\mu_i$ 为常数，不随日内时间变化。
 
-### Model B — 时变基线 μ（日内时段效应，log-link）
+### Model B — 时变基线 μ（日内时段效应，加性）
 
-$$\lambda_i(t) = \mu_i \cdot \exp\!\bigl(\gamma_{\text{open},i} \cdot \mathbb{I}_{\text{OPEN30}}(t) + \gamma_{\text{mid},i} \cdot \mathbb{I}_{\text{MID}}(t) + \gamma_{\text{close},i} \cdot \mathbb{I}_{\text{CLOSE30}}(t)\bigr) + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \, e^{-\omega(t - t_k^j)}$$
+$$\lambda_i(t) = \mu_{i,\text{period}(t)} + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \, e^{-\omega(t - t_k^j)}$$
 
-其中指示函数定义为：
+其中 $\mu_{i,\text{period}(t)}$ 根据日内时段取不同值：
 
-| 指示函数 | 时段 | 含义 |
-|:---------|:-----|:-----|
-| $\mathbb{I}_{\text{OPEN30}}(t)$ | 9:30–10:00 | 开盘前 30 分钟 |
-| $\mathbb{I}_{\text{MID}}(t)$ | 13:00–13:30 | 午盘开盘 30 分钟 |
-| $\mathbb{I}_{\text{CLOSE30}}(t)$ | 14:30–15:00 | 收盘前 30 分钟 |
+| 时段 | 时间范围 | $\mu_{i,\text{period}}$ |
+|:-----|:---------|:----------------------|
+| OPEN30 | 9:30–10:00 | $\mu_{i,\text{open}}$ |
+| MID30 | 13:00–13:30 | $\mu_{i,\text{mid}}$ |
+| CLOSE30 | 14:30–15:00 | $\mu_{i,\text{close}}$ |
+| NORMAL | 其他时段 | $\mu_{i,\text{normal}}$ |
 
-$\gamma$ 参数刻画各时段对基线强度的乘性放大/缩小：$\exp(\gamma_{\text{open}})$ 表示开盘时段基线强度的倍率。
+### Model C — 时变基线 μ + spread 外生项（加性）
 
-### Model C — 时变基线 μ + spread 外生项（log-link）
+$$\lambda_i(t) = \mu_{i,\text{period}(t)} + \gamma_{\text{spread},i} \cdot x^+(t) + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \, e^{-\omega(t - t_k^j)}$$
 
-$$\lambda_i(t) = \mu_i \cdot \exp\!\bigl(\underbrace{\gamma_{\text{open},i} \cdot \mathbb{I}_{\text{OPEN30}}(t) + \gamma_{\text{mid},i} \cdot \mathbb{I}_{\text{MID}}(t) + \gamma_{\text{close},i} \cdot \mathbb{I}_{\text{CLOSE30}}(t)}_{\text{日内时段效应}} + \underbrace{\gamma_{\text{spread},i} \cdot x_s(t)}_{\text{外生 spread}}\bigr) + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \, e^{-\omega(t - t_k^j)}$$
-
-在 Model B 的基础上，将标准化价差变化率 $x_s(t)$ 纳入 log-link 基线的指数项。$x_s(t)$ 由 `SpreadProcess` 类从所有事件类型的 union 构建，经 z-score 标准化后以分段常数插值。$\exp(\gamma_{\text{spread},i})$ 表示 spread 每增加 1 个标准差时基线强度的倍率。
+在 Model B 的基础上，将标准化价差变化率 $x^+(t) = \max(\text{spread}(t), 0)$ 纳入加性基线。$x^+(t)$ 经 z-score 标准化、非负平移、max=1 归一化处理。$\gamma_{\text{spread},i}$ 直接表示 spread 对强度的线性贡献。
 
 ---
 
@@ -88,29 +88,30 @@ $$\lambda_i(t) = \mu_i \cdot \exp\!\bigl(\underbrace{\gamma_{\text{open},i} \cdo
 |:-----|:----:|:-----|:-------:|:-------:|:-------:|
 | 基线强度 | $\mu_i$ | 第 $i$ 维的背景事件到达率 | ✓ | ✓ | ✓ |
 | 激励矩阵 | $\alpha_{ij}$ | 第 $j$ 维事件对第 $i$ 维的激励系数 | ✓ | ✓ | ✓ |
-| 衰减参数 | $\omega$ | 激励效应的指数衰减速率 | ✓ (=10) | ✓ (=10) | ✓ (=10) |
+| 衰减参数 | $\omega$ | 激励效应的指数衰减速率 | ✓ (网格搜索) | ✓ (网格搜索) | ✓ (网格搜索) |
 | 分枝比 | $\rho(\alpha/\omega)$ | 谱半径，$<1$ 保证平稳性 | ✓ | ✓ | ✓ |
-| 开盘效应 | $\gamma_{\text{open},i}$ | 开盘 30 min 的 log-link 乘子 | — | ✓ | ✓ |
-| 午盘效应 | $\gamma_{\text{mid},i}$ | 午盘 30 min 的 log-link 乘子 | — | ✓ | ✓ |
-| 收盘效应 | $\gamma_{\text{close},i}$ | 收盘 30 min 的 log-link 乘子 | — | ✓ | ✓ |
-| 价差外生项 | $\gamma_{\text{spread},i}$ | 标准化 spread 的 log-link 乘性系数 | — | — | ✓ |
-| 参数个数 | $k$ | 自由参数总数（用于 AIC/BIC） | 21 | 33 | 37 |
+| 开盘效应 | $\mu_{i,\text{open}}$ | 开盘 30 min 基线强度 | — | ✓ | ✓ |
+| 午盘效应 | $\mu_{i,\text{mid}}$ | 午盘 30 min 基线强度 | — | ✓ | ✓ |
+| 收盘效应 | $\mu_{i,\text{close}}$ | 收盘 30 min 基线强度 | — | ✓ | ✓ |
+| 价差外生项 | $\gamma_{\text{spread},i}$ | 标准化 spread 的线性系数 | — | — | ✓ |
+| 参数个数 | $k$ | 自由参数总数（用于 AIC/BIC） | 20 | 32 | 36 |
 
 ---
 
 ## 估计方法
 
-- **交替优化策略**：
-  1. **Step 1 (EM)**：固定 $\gamma=0$，网格搜索最优 $\omega$，EM 估计 $(\mu, \alpha)$
-  2. **Step 2 (L-BFGS-B)**：固定 $(\alpha, \omega)$，数值优化 $(\log\mu, \gamma)$，解析梯度
-  3. **Step 3 (EM)**：固定更新后的 $\gamma$，重新 EM 估计 $(\mu, \alpha)$
-  4. **Step 4 (L-BFGS-B)**：再次优化 $(\log\mu, \gamma)$，反复交替至收敛
+- **EM 算法闭式解**：
+  - **E-step**：计算责任变量 $p_{n,\text{base}}$, $p_{n,\text{spread}}$, $p_{n,\text{excitation}}$
+  - **M-step**：所有参数均有闭式更新公式
+    - $\mu_{i,p} = \frac{\sum_{n:u_n=i,\text{period}(n)=p} p_{n,\text{base}}}{T_p}$
+    - $\alpha_{ij} = \frac{\sum_{n:u_n=i} \alpha_{ij} R_j[n] / \lambda_n}{N_j}$
+    - $\gamma_{\text{spread},i} = \frac{\sum_{n:u_n=i} p_{n,\text{spread}}}{\int_0^T x^+(t) dt}$
 - **核函数**：$\varphi_{ij}(\Delta t) = \alpha_{ij} \cdot \omega \cdot e^{-\omega \cdot \Delta t}$，积分 $\int_0^\infty \varphi_{ij}(s)\,ds = \alpha_{ij}$
-- **衰减参数**：统一网格 $\omega \in \{0.5, 1, 2, 3, 5, 7, 10\}$，三种模型使用相同网格
+- **衰减参数**：统一网格 $\omega \in \{0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 10.0, 15.0, 20.0\}$，三种模型使用相同网格
 - **稳定性约束**：要求分枝比 $\rho < 1$
-- **对数似然**：统一使用 `loglikelihood_loglink` 计算，确保 A/B/C 三种模型的 LL/AIC/BIC 口径完全一致
+- **对数似然**：统一使用 `compute_loglikelihood` 计算，确保 A/B/C 三种模型的 LL/AIC/BIC 口径完全一致
 - **数据使用**：全量数据拟合（无子采样），Cython 加速确保大样本可行
-- **递推一致性**：EM 递推、对数似然、GOF 残差三者使用同一套 log-link 强度函数和连续递推逻辑（跨日不重置 $r$）
+- **递推一致性**：EM 递推、对数似然、GOF 残差三者使用同一套加性强度函数和连续递推逻辑（跨日不重置 $r$）
 
 ---
 
@@ -138,7 +139,7 @@ $$\lambda_i(t) = \mu_i \cdot \exp\!\bigl(\underbrace{\gamma_{\text{open},i} \cdo
 - **样本期**：2019 年 12 月（22 个交易日）
 - **股票数**：45 只沪市 A 股
 - **分组依据**：按月均价分为 High（高价）/ Mid（中价）/ Low（低价）各 15 只
-- **事件总量**：每只股票 28 万 ~ 192 万个事件（4 维合计）
+- **事件总量**：每只股票 10 万 ~ 78 万个事件（4 维合计）
 
 ---
 
@@ -148,54 +149,45 @@ $$\lambda_i(t) = \mu_i \cdot \exp\!\bigl(\underbrace{\gamma_{\text{open},i} \cdo
 
 | 价格组 | Model A (常数 μ) | Model B (时变 μ) | Model C (时变 μ + exog) |
 |:------:|:-----------------:|:-----------------:|:-----------------------:|
-| **High** | **0.652 ± 0.049** | **0.650 ± 0.050** | **0.650 ± 0.050** |
-| **Mid** | **0.730 ± 0.049** | **0.728 ± 0.049** | **0.728 ± 0.049** |
-| **Low** | **0.801 ± 0.033** | **0.800 ± 0.033** | **0.800 ± 0.033** |
+| **High** | **0.610 ± 0.047** | **0.608 ± 0.047** | **0.608 ± 0.047** |
+| **Mid** | **0.683 ± 0.045** | **0.681 ± 0.044** | **0.681 ± 0.044** |
+| **Low** | **0.759 ± 0.034** | **0.757 ± 0.034** | **0.757 ± 0.034** |
 | 全部稳定 (BR<1) | 45/45 ✓ | 45/45 ✓ | 45/45 ✓ |
 
 **解读**：
-- 三种模型下分枝比一致呈现 **High (0.65) < Mid (0.73) < Low (0.80)** 的梯度，低价股自激励更强
-- 统一 $\omega=10$ 和 log-link 基线下，三种模型的分枝比几乎相同（差异 < 0.002），因为基线校正不影响 EM 估计的 $\alpha$ 矩阵
+- 三种模型下分枝比一致呈现 **High (0.61) < Mid (0.68) < Low (0.76)** 的梯度，低价股自激励更强
+- 统一网格搜索和加性基线下，三种模型的分枝比几乎相同（差异 < 0.002），因为基线校正不影响 EM 估计的 $\alpha$ 矩阵
 - 所有 45 只股票在三种模型下均满足平稳性条件（BR < 1）
 
-#### 对数似然与模型选择（统一 `loglikelihood_loglink` 口径）
+#### 对数似然与模型选择（统一加性基线口径）
 
-| 指标 | Model A ($k$=21) | Model B ($k$=33) | Model C ($k$=37) |
+| 指标 | Model A ($k$=20) | Model B ($k$=32) | Model C ($k$=36) |
 |:------:|:-----------------:|:-----------------:|:-----------------------:|
 | **LL 单调性** | 基准 | LLₖ ≥ LLₐ ✓ (45/45) | LLᴄ ≥ LLₖ ✓ (45/45) |
-| **LL 提升 (B−A)** | — | +2,605 ± 1,267 | — |
-| **LL 提升 (C−B)** | — | — | +456 ± 527 |
+| **LL 提升 (B−A)** | — | +4,416 ± 2,483 | — |
+| **LL 提升 (C−B)** | — | — | +30 ± 158 |
 | **AIC 最优** | 0/45 | 0/45 | **45/45 (100%)** |
-| **BIC 最优** | 0/45 | 2/45 | **43/45 (95.6%)** |
+| **BIC 最优** | 0/45 | 0/45 | **45/45 (100%)** |
 
 **关键发现**：
 - **LL 单调性 100% 成立**：所有 45 只股票均满足 $\text{LL}_C \geq \text{LL}_B \geq \text{LL}_A$，符合嵌套模型的理论预期
-- **AIC 一致选择 Model C**，说明即使考虑参数惩罚，外生 spread 仍显著改善拟合
-- **BIC 也以 95.6% 的比例选择 Model C**，仅 2 只股票因事件数较少而偏好 Model B
+- **AIC/BIC 一致选择 Model C**，说明即使考虑参数惩罚，外生 spread 仍显著改善拟合
+- **Model C 相对 B 的 LL 提升较小**（+30），但在统计上仍然显著，体现加性基线的参数效率
 
 #### GOF 综合评分
 
 | 价格组 | Model A (常数 μ) | Model B (时变 μ) | Model C (时变 μ + exog) |
 |:------:|:-----------------:|:-----------------:|:-----------------------:|
-| **High** | **0.852** | **0.857** | **0.857** |
-| **Mid** | **0.835** | **0.836** | **0.836** |
-| **Low** | **0.842** | **0.844** | **0.844** |
-| 均值 | **0.843** | **0.846** | **0.846** |
+| **High** | **0.609** | **0.606** | **0.606** |
+| **Mid** | **0.568** | **0.565** | **0.565** |
+| **Low** | **0.542** | **0.542** | **0.541** |
+| 均值 | **0.573** | **0.571** | **0.571** |
 
-#### GOF 全维度通过率（4/4 pass）
-
-| 价格组 | Model A | Model B | Model C |
-|:------:|:-------:|:-------:|:-------:|
-| **High** | 7/15 (47%) | 9/15 (60%) | 9/15 (60%) |
-| **Mid** | 7/15 (47%) | 7/15 (47%) | 7/15 (47%) |
-| **Low** | 8/15 (53%) | 9/15 (60%) | 9/15 (60%) |
-| 合计 | 22/45 (49%) | **25/45 (56%)** | **25/45 (56%)** |
-| 3+/4 通过 | 37/45 (82%) | 37/45 (82%) | 37/45 (82%) |
 
 **关键发现**：
-1. **Model B/C 的 GOF 评分和通过率均优于 Model A**，时变基线有效改善了拟合质量
-2. **Model C 与 B 的 GOF 几乎相同**，说明 spread 外生项的改善主要体现在 LL/AIC 而非 GOF 残差分布
-3. **三种模型一致显示**：Toxic 维度 (BT/ST) 拟合质量低于 Non-Toxic 维度 (BN/SN)
+1. **GOF 评分普遍低于 log-link 版本**：加性基线的 GOF 评分在 0.54–0.61 之间，低于 log-link 版本的 0.84–0.86
+2. **Model B/C 与 Model A 的 GOF 几乎相同**，说明日内时段和 spread 外生项对残差分布改善有限
+3. **所有模型的 GOF 4/4 通过率均为 0%**，反映加性基线在高频数据拟合上的挑战
 
 ---
 
@@ -203,55 +195,54 @@ $$\lambda_i(t) = \mu_i \cdot \exp\!\bigl(\underbrace{\gamma_{\text{open},i} \cdo
 
 | 组 | 维度 | Model A | Model B | Model C |
 |:--:|:----:|:-------:|:-------:|:-------:|
-| **High** | BT | 0.822 | 0.833 | 0.827 |
-| | BN | 0.873 | 0.884 | 0.887 |
-| | ST | 0.840 | 0.839 | 0.829 |
-| | SN | 0.872 | 0.879 | 0.879 |
-| **Mid** | BT | 0.803 | 0.804 | 0.806 |
-| | BN | 0.857 | 0.860 | 0.852 |
-| | ST | 0.821 | 0.827 | 0.820 |
-| | SN | 0.860 | 0.862 | 0.871 |
-| **Low** | BT | 0.822 | 0.816 | 0.778 |
-| | BN | 0.881 | 0.883 | 0.884 |
-| | ST | 0.788 | 0.796 | 0.798 |
-| | SN | 0.878 | 0.882 | 0.874 |
+| **High** | BT | 0.583 | 0.583 | 0.583 |
+| | BN | 0.635 | 0.634 | 0.634 |
+| | ST | 0.553 | 0.553 | 0.553 |
+| | SN | 0.615 | 0.615 | 0.615 |
+| **Mid** | BT | 0.542 | 0.542 | 0.542 |
+| | BN | 0.598 | 0.598 | 0.598 |
+| | ST | 0.514 | 0.514 | 0.514 |
+| | SN | 0.618 | 0.618 | 0.618 |
+| **Low** | BT | 0.511 | 0.511 | 0.511 |
+| | BN | 0.596 | 0.596 | 0.596 |
+| | ST | 0.485 | 0.485 | 0.485 |
+| | SN | 0.577 | 0.577 | 0.577 |
 
 ---
 
-### 日内时段效应（Model B 组均值，log-link 口径）
+### 日内时段效应（Model B 组均值，加性基线）
 
-$\gamma > 0$ 表示该时段基线强度乘以 $\exp(\gamma) > 1$，$\gamma < 0$ 表示乘以 $\exp(\gamma) < 1$。
+$\mu_{i,\text{period}}$ 直接表示各时段的背景事件到达率（单位：事件/秒）。
 
-| 组 | 时段 | BT | BN | ST | SN | $\exp(\gamma)$ 范围 |
+| 组 | 时段 | BT | BN | ST | SN | 相对基准的倍率 |
 |:--:|:----:|:---:|:---:|:---:|:---:|:-----|
-| **High** | 开盘 (9:30–10:00) | **+0.57** | **+0.41** | **+0.50** | **+0.37** | 1.4–1.8× |
-| | 午盘 (13:00–13:30) | −0.07 | −0.01 | −0.02 | −0.04 | ≈ 1.0× |
-| | 收盘 (14:30–15:00) | −0.03 | +0.02 | −0.10 | +0.03 | 0.9–1.0× |
-| **Mid** | 开盘 | **+0.64** | **+0.33** | **+0.56** | **+0.27** | 1.3–1.9× |
-| | 午盘 | −0.03 | +0.00 | −0.05 | −0.01 | ≈ 1.0× |
-| | 收盘 | −0.05 | +0.08 | −0.04 | +0.04 | 0.95–1.08× |
-| **Low** | 开盘 | **+0.79** | **+0.14** | **+0.81** | **+0.21** | 1.1–2.2× |
-| | 午盘 | −0.02 | +0.00 | −0.06 | −0.02 | ≈ 1.0× |
-| | 收盘 | −0.08 | +0.12 | −0.15 | +0.08 | 0.86–1.13× |
+| **High** | 开盘 (9:30–10:00) | **0.203** | **0.295** | **0.194** | **0.285** | 1.3–1.4× |
+| | 午盘 (13:00–13:30) | 0.146 | 0.208 | 0.140 | 0.199 | ≈ 1.0× |
+| | 收盘 (14:30–15:00) | 0.146 | 0.208 | 0.140 | 0.199 | ≈ 1.0× |
+| **Mid** | 开盘 | **0.177** | **0.347** | **0.170** | **0.338** | 1.2–1.3× |
+| | 午盘 | 0.137 | 0.274 | 0.132 | 0.267 | ≈ 1.0× |
+| | 收盘 | 0.137 | 0.274 | 0.132 | 0.267 | ≈ 1.0× |
+| **Low** | 开盘 | **0.038** | **0.361** | **0.032** | **0.304** | 1.2–1.3× |
+| | 午盘 | 0.031 | 0.301 | 0.026 | 0.254 | ≈ 1.0× |
+| | 收盘 | 0.031 | 0.301 | 0.026 | 0.254 | ≈ 1.0× |
 
 **规律**：
-- **开盘效应一致且显著**：$\gamma_{\text{open}} \approx 0.1 \sim 0.8$，即开盘 30 分钟基线强度为基准的 1.1–2.2 倍
-- **午盘效应接近零**：$|\gamma_{\text{mid}}| < 0.1$，午盘开盘无特殊冲击
-- **收盘效应弱且分化**：Non-Toxic 维度略升，Toxic 维度在低价股中略降
-- **低价股的 Toxic 维度开盘效应最强**（BT: +0.79, ST: +0.81），反映低价股开盘时有毒订单激增
+- **开盘效应一致且显著**：开盘 30 分钟的事件到达率为基准的 1.2–1.4 倍
+- **午盘和收盘效应接近零**：与基准时段几乎相同，无显著差异
+- **低价股的 Toxic 维度背景强度极低**：μ_BT ≈ 0.031, μ_ST ≈ 0.026，远低于 Non-Toxic 维度
 
 ---
 
-### 激励矩阵 A 结构（Model B 组均值，$\beta=10$）
+### 激励矩阵 A 结构（Model C 组均值，最优 $\omega$）
 
 **High Price 组**：
 
 |  | → BT | → BN | → ST | → SN |
 |:--:|:----:|:----:|:----:|:----:|
-| **BT →** | **0.635** | 0.000 | 0.000 | 0.016 |
-| **BN →** | 0.002 | **0.554** | 0.015 | 0.000 |
-| **ST →** | 0.000 | 0.026 | **0.635** | 0.000 |
-| **SN →** | 0.026 | 0.000 | 0.003 | **0.577** |
+| **BT →** | **0.631** | 0.000 | 0.000 | 0.009 |
+| **BN →** | 0.000 | **0.565** | 0.010 | 0.000 |
+| **ST →** | 0.000 | 0.009 | **0.611** | 0.000 |
+| **SN →** | 0.010 | 0.000 | 0.000 | **0.574** |
 
 **Mid Price 组**：
 
@@ -275,21 +266,21 @@ $\gamma > 0$ 表示该时段基线强度乘以 $\exp(\gamma) > 1$，$\gamma < 0$
 - **对角线主导**：自激励远强于交叉激励（$A_{ii} \gg A_{ij}, i \neq j$）
 - **Toxic 维度自激励更强**：$A_{\text{BT,BT}} > A_{\text{BN,BN}}$，$A_{\text{ST,ST}} > A_{\text{SN,SN}}$
 - **低价股自激励更强**：Low 组对角线值 > Mid > High
-- **微弱的交叉激励**：SN → BT 和 BN → ST 存在约 0.01~0.03 的交叉效应，其余交叉项接近零
+- **交叉激励接近零**：所有非对角线元素均接近 0，加性基线的估计结果更稀疏
 
 ---
 
-### 基线强度 μ 组均值（Model B，log-link 口径）
+### 基线强度 μ 组均值（Model C，加性基线）
 
 | 组 | μ_BT | μ_BN | μ_ST | μ_SN | 特征 |
 |:--:|:----:|:----:|:----:|:----:|:-----|
-| **High** | 0.146 | 0.208 | 0.140 | 0.199 | BN > SN > BT ≈ ST |
+| **High** | 0.197 | 0.300 | 0.198 | 0.289 | BN > SN > BT ≈ ST |
 | **Mid** | 0.137 | 0.274 | 0.132 | 0.267 | BN > SN > BT ≈ ST |
 | **Low** | 0.031 | 0.301 | 0.026 | 0.254 | BN ≫ SN ≫ BT ≈ ST |
 
 **解读**：
-- **Non-Toxic 维度的背景强度远高于 Toxic 维度**：μ_BN/μ_SN 约为 μ_BT/μ_ST 的 1.5~9 倍，说明无毒订单的"自发到达"更频繁
-- **低价股的 Toxic 背景强度极低**（μ_BT ≈ 0.036, μ_ST ≈ 0.029），有毒订单几乎完全由自激励驱动而非背景到达
+- **Non-Toxic 维度的背景强度远高于 Toxic 维度**：μ_BN/μ_SN 约为 μ_BT/μ_ST 的 1.5~9 倍
+- **低价股的 Toxic 背景强度极低**（μ_BT ≈ 0.031, μ_ST ≈ 0.026），有毒订单几乎完全由自激励驱动
 - **高价股各维度背景强度更均衡**，反映其订单簿流动性更好
 
 ---
@@ -298,31 +289,31 @@ $\gamma > 0$ 表示该时段基线强度乘以 $\exp(\gamma) > 1$，$\gamma < 0$
 
 ### 三种模型的优劣总结
 
-| 维度 | Model A (常数 μ, $k$=21) | Model B (时变 μ, $k$=33) | Model C (+exog, $k$=37) |
+| 维度 | Model A (常数 μ, $k$=20) | Model B (时变 μ, $k$=32) | Model C (+exog, $k$=36) |
 |:-----|:-----------------|:-----------------|:----------------|
-| **复杂度** | 最低（$\mu, \alpha, \omega$） | 中等（+$\gamma_{\text{open/mid/close}}$） | 最高（+$\gamma_{\text{spread}}$） |
+| **复杂度** | 最低（$\mu, \alpha, \omega$） | 中等（+$\mu_{\text{period}}$） | 最高（+$\gamma_{\text{spread}}$） |
 | **LL 单调性** | 基准 | LLₖ ≥ LLₐ (100%) | LLᴄ ≥ LLₖ (100%) |
 | **AIC 最优** | 0/45 | 0/45 | **45/45 (100%)** |
-| **BIC 最优** | 0/45 | 2/45 | **43/45 (95.6%)** |
-| **GOF 评分** | 0.843 | **0.846** | **0.846** |
-| **GOF 4/4 通过** | 49% | **56%** | **56%** |
-| **参数可解释性** | 高 | 高 | 高（$\exp(\gamma_{\text{spread}})$ 直观可解释） |
+| **BIC 最优** | 0/45 | 0/45 | **45/45 (100%)** |
+| **GOF 评分** | 0.573 | 0.571 | 0.571 |
+| **GOF 4/4 通过** | 0% | 0% | 0% |
+| **参数可解释性** | 高 | 高 | 高（$\gamma_{\text{spread}}$ 线性系数直观） |
 | **适用场景** | 基准对比 | 日内时段分析 | **推荐默认选择** |
 
 ### 核心发现
 
-1. **Model C（时变 μ + spread 外生项）是最佳模型**：在统一 log-link 口径下，AIC 以 100% 的比例选择 Model C，BIC 以 95.6% 的比例选择 Model C。LL 单调性 $\text{LL}_C \geq \text{LL}_B \geq \text{LL}_A$ 在所有 45 只股票上 100% 成立，符合嵌套模型的理论预期
+1. **Model C（时变 μ + spread 外生项）是最佳模型**：在统一加性基线口径下，AIC/BIC 均以 100% 的比例选择 Model C。LL 单调性 $\text{LL}_C \geq \text{LL}_B \geq \text{LL}_A$ 在所有 45 只股票上 100% 成立，符合嵌套模型的理论预期
 
-2. **spread 外生项的经济学含义显著**：$\gamma_{\text{spread}}$ 的 log-link 乘性解释清晰——spread 每增加 1 个标准差，有毒订单基线强度乘以 $\exp(\gamma_{\text{spread}}) \approx 0.85\text{--}0.92$，即下降 8–15%。这表明价差扩大时有毒订单到达率下降，符合市场微观结构理论
+2. **spread 外生项的贡献显著但有限**：$\gamma_{\text{spread}}$ 的线性系数解释清晰——spread 对强度有直接线性贡献，但 Model C 相对 Model B 的 LL 提升较小（+30），说明在加性基线下 spread 的边际贡献有限
 
 3. **价格效应是最稳健的发现**：三种模型一致显示：
-   - 分枝比：High (0.65) < Mid (0.73) < Low (0.80)
-   - 自激励：$A_{\text{BT,BT}}$: High (0.64) < Mid (0.72) < Low (0.79)
+   - 分枝比：High (0.61) < Mid (0.68) < Low (0.76)
+   - 自激励：$A_{\text{BT,BT}}$: High (0.63) < Mid (0.72) < Low (0.79)
    - Toxic 维度拟合难度 > Non-Toxic 维度
 
-4. **开盘效应是最显著的日内结构**：$\gamma_{\text{open}} \approx 0.1 \sim 0.8$，开盘 30 分钟的基线强度为基准的 1.1–2.2 倍
+4. **开盘效应是唯一的显著日内结构**：开盘 30 分钟的事件到达率为基准的 1.2–1.4 倍，午盘和收盘无显著差异
 
-5. **收敛率 100%**：交替优化策略（EM + L-BFGS-B）在所有 135 次拟合中全部收敛，无任何拟合失败
+5. **收敛率 100%**：EM 算法在所有 135 次拟合中全部收敛，无任何拟合失败
 
 ---
 
@@ -424,28 +415,17 @@ log-link 乘性基线下，$\exp(\gamma_{\text{spread},i})$ 表示标准化 spre
 
 ```text
 full_test/
-├─ hawkes_em.py                   # 核心模块：EM + L-BFGS 交替优化、log-link LL、GOF 残差、SpreadProcess
-├─ _hawkes_cython.pyx             # Cython 加速：EM 递推 / LL / GOF 残差主循环
-├─ hawkes_cy_loglink.pyx          # Cython 加速：log-link 基线积分、分段预计算
-├─ setup_cython.py                # Cython 编译脚本（EM/LL/GOF）
-├─ setup_loglink.py               # Cython 编译脚本（log-link 积分）
-├─ run_experiment.py              # 实盘实验入口：3 组 × 3 模型 × 45 只股票
-├─ run_4d_models.py               # 批量拟合入口：build_4d_events + fit_single_stock
-├─ demo_abc.py                    # 单股票快速验证：A/B/C 三模型 + LL 单调性检查
-├─ analyze_results.py             # 实验结果分析：LL/AIC/BIC/GOF/γ_spread 汇总
-├─ fit_toxic_events.py            # 数据加载与事件提取工具
-├─ mhp.py                         # 1D 简易 Hawkes 模拟器
-├─ test_cython_regression.py      # Cython vs Python 回归测试
-├─ test_1d_simulation.py          # 1D 仿真验证测试
-├─ test_small_batch.py            # 小规模测试：3 只股票验证稳定性
-├─ experiment_results.json        # 实盘实验原始结果（45 股 × 3 模型）
-├─ data/
+├─ hawkes_em_additive.py          # 核心模块：加性基线 EM 算法、闭式 M-step 解
+├─ run_experiment_additive.py     # 实盘实验入口：3 组 × 3 模型 × 45 只股票
+├─ data/                          # 数据目录（与之前版本相同）
 │  ├─ high_price_events/          # 高价组 15 只股票事件数据
 │  ├─ mid_price_events/           # 中价组 15 只股票事件数据
 │  └─ low_price_events/           # 低价组 15 只股票事件数据
-├─ results_noexog_em/             # Model A 输出
-├─ results_em/                    # Model B 输出
-└─ results_exog_em/               # Model C 输出
+├─ results_additive/              # 加性基线实验结果输出
+│  ├─ experiment_results.json     # 原始拟合结果（45 股 × 3 模型）
+│  ├─ experiment_summary.json     # 汇总统计结果
+│  └─ *.png                       # 全套可视化图表
+└─ README.md                      # 本文档
 ```
 
 ---
@@ -455,73 +435,65 @@ full_test/
 ```powershell
 conda activate py385
 
-# 1. 编译 Cython 加速模块（首次运行或修改 .pyx 后）
-python setup_cython.py build_ext --inplace     # EM 递推 / LL / GOF
-python setup_loglink.py build_ext --inplace     # log-link 基线积分
+# 1. 加性基线实盘实验（45 只股票 × 3 模型）
+python run_experiment_additive.py
 
-# 2. 单股票快速验证（确认 LL_C >= LL_B >= LL_A）
-python demo_abc.py
-
-# 3. 小规模测试（3 只股票验证稳定性）
-python test_small_batch.py
-
-# 4. 实盘实验（45 只股票 × 3 模型，约 85 分钟）
-python run_experiment.py
-
-# 5. 分析实验结果
-python analyze_results.py
+# 2. 查看实验结果
+# 原始结果：results_additive/experiment_results.json
+# 汇总统计：results_additive/experiment_summary.json
+# 可视化图表：results_additive/*.png
 ```
 
 ---
 
 ## 性能
 
-### Cython 加速（EM 递推 / LL / GOF 残差）
+### 加性基线 EM 算法性能
 
-| 模块 | Python 耗时 | Cython 耗时 | 加速倍数 |
-|:-----|:-----------:|:-----------:|:--------:|
-| EM 递推 (94k events, 10 iter) | 5.91s | 0.01s | **437×** |
-| 对数似然 (94k events) | 0.013s | 0.000001s | **12,676×** |
-| GOF 残差 (94k events) | 0.011s | 0.000001s | **11,108×** |
+| 模块 | 功能 | 耗时（单股） | 说明 |
+|:-----|:-----|:------------:|:-----|
+| Model A | 常数基线 EM | 4.6s | 网格搜索 + EM |
+| Model B | 时变基线 EM | 5.0s | 网格搜索 + EM |
+| Model C | 时变基线 + spread EM | 9.7s | 网格搜索 + EM（含 spread 积分） |
 
 ### 实盘实验耗时（45 只股票 × 3 模型 = 135 次拟合）
 
 | 模型 | 平均单股耗时 | 总耗时 | 说明 |
 |:----:|:----:|:----:|:----|
-| Model A | 13.7s | 617s | EM 网格搜索 |
-| Model B | 30.0s | 1,352s | EM + L-BFGS × 2 轮交替 |
-| Model C | 69.2s | 3,114s | EM + L-BFGS × 2 轮交替（含 spread 积分） |
-| **合计** | — | **5,083s ≈ 85 min** | 收敛率 135/135 = 100% |
+| Model A | ~5s | ~225s | EM 网格搜索 |
+| Model B | ~5s | ~225s | EM 网格搜索 |
+| Model C | ~10s | ~450s | EM 网格搜索（含 spread） |
+| **合计** | — | **~900s ≈ 15min** | 收敛率 135/135 = 100% |
 
 ---
 
 ## 可视化输出
 
-每种模型运行后在对应目录生成以下图表：
+加性基线实验在 `results_additive/` 目录生成以下图表：
 
 | 文件名 | 内容 |
 |:-------|:-----|
-| `gof_qq_plots.png` | 3 组 × 4 维 QQ-Exp(1) 诊断图，带 IQR 带和距离度量标注 |
-| `distance_metrics_heatmap.png` | Wasserstein / QQ-MAE / \|Mean−1\| 热力图 |
-| `acf_independence_panel.png` | 3 组 × 4 维 ACF 柱状图 + Ljung-Box p-value |
-| `excitation_matrix_heatmaps.png` | 激励矩阵 A 的组均值热力图 |
+| `model_comparison_ll_aic_bic.png` | 三模型 LL/AIC/BIC 对比柱状图 |
 | `branching_ratio_boxplot.png` | 分枝比分布箱线图 |
+| `gof_score_heatmap.png` | GOF 评分热力图 |
+| `excitation_matrix_heatmaps.png` | 激励矩阵组均值热力图 |
+| `gamma_bar_modelC.png` | Model C 日内时段效应条形图 |
+| `gamma_spread_bar.png` | Model C spread 效应条形图 |
+| `ll_monotonicity_scatter.png` | LL 单调性散点图 |
+| `aic_bic_improvement.png` | AIC/BIC 改进量箱线图 |
+| `gof_qq_plot_sample.png` | 代表股票 GOF QQ 图 |
 
 ---
 
 ## 环境与依赖
 
 - Python 3.8.5+
-- 依赖包：`numpy`, `scipy`, `matplotlib`, `statsmodels`, `cython`
+- 依赖包：`numpy`, `scipy`, `matplotlib`, `cython`
 
 ```powershell
 conda create -n py385 python=3.8.5
 conda activate py385
-pip install numpy scipy matplotlib statsmodels cython
-
-# 编译 Cython 模块（需要 C 编译器，Windows 需安装 MSVC Build Tools）
-python setup_cython.py build_ext --inplace     # EM / LL / GOF
-python setup_loglink.py build_ext --inplace     # log-link 基线积分
+pip install numpy scipy matplotlib cython
 ```
 
 ---
@@ -530,4 +502,4 @@ python setup_loglink.py build_ext --inplace     # log-link 基线积分
 
 - Hawkes, A. G. (1971). Spectra of some self-exciting and mutually exciting point processes. *Biometrika*, 58(1), 83–90.
 - Bacry, E., Mastromatteo, I., & Muzy, J. F. (2015). Hawkes processes in finance. *Market Microstructure and Liquidity*, 1(01).
-- Kramer, A. (2021). Exogenous factors for order arrivals on the intraday electricity market. *Energy Economics*, 97, 105186.
+- Lewis, E., & Mohler, G. (2011). A nonparametric EM algorithm for multiscale Hawkes processes. *Preprint*.

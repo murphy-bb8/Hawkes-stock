@@ -1,0 +1,17 @@
+{
+  "true_parameters": {
+    "mu": 0.15,
+    "alpha": 0.55,
+    "omega": 3.0,
+    "gamma_open": 0.3,
+    "gamma_mid": 0.05,
+    "gamma_close": -0.1,
+    "gamma_spread": 0.2
+  },
+  "simulation": {
+    "n_days": 5,
+    "n_events": 30784,
+    "T": 72000
+  },
+  "results": {}
+}
