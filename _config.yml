@@ -1,0 +1,45 @@
+# Jekyll configuration for MathJax support
+markdown: kramdown
+highlighter: rouge
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# Site settings
+title: Hawkes-stock
+description: Multi-dimensional Hawkes Process Modeling with Additive Baseline EM Algorithm
+baseurl: "/Hawkes-stock"
+url: "https://murphy-bb8.github.io"
+
+# Build settings
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# Exclude files from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - "*.py"
+  - "*.pyx"
+  - "*.c"
+  - "*.pyd"
+  - data/
+  - results*/
+  - __pycache__/
+  - build/
+  - .git/
+  - .gitignore
+
+# Include directories that start with underscore
+include:
+  - _layouts
+  - _includes
+  - _config.yml
+  - assets

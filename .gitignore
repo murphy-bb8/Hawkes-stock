@@ -36,6 +36,11 @@ data/
 events_sim_1d.json
 events_100k.json
 
-# Generated HTML
+# Generated HTML (exclude specific patterns but allow Jekyll)
 *.html
+!_layouts/
+!_includes/
+!_sass/
+!_site/
+!assets/
 out/
