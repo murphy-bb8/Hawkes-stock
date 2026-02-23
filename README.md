@@ -65,14 +65,21 @@ $$\lambda_i(t) = \mu_i + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \
 
 $$\lambda_i(t) = \mu_{i,\text{period}(t)} + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \, e^{-\omega(t - t_k^j)}$$
 
-其中 $\mu_{i,\text{period}(t)}$ 根据日内时段取不同值：
+其中 $\mu_{i,\text{period}(t)}$ 根据日内时段取不同值，使用**分段常数哑变量**刻画：
 
-| 时段 | 时间范围 | $\mu_{i,\text{period}}$ |
-|:-----|:---------|:----------------------|
-| OPEN30 | 9:30–10:00 | $\mu_{i,\text{open}}$ |
-| MID30 | 13:00–13:30 | $\mu_{i,\text{mid}}$ |
-| CLOSE30 | 14:30–15:00 | $\mu_{i,\text{close}}$ |
-| NORMAL | 其他时段 | $\mu_{i,\text{normal}}$ |
+| 时段 | 时间范围 | 哑变量 $d_{\text{period}}(t)$ | 基线强度 $\mu_{i,\text{period}}$ |
+|:-----|:---------|:---------------------------:|:------------------------------:|
+| OPEN30 | 9:30–10:00 | $d_{\text{open}}(t) = 1$ | $\mu_{i,\text{open}}$ |
+| MID30 | 13:00–13:30 | $d_{\text{mid}}(t) = 1$ | $\mu_{i,\text{mid}}$ |
+| CLOSE30 | 14:30–15:00 | $d_{\text{close}}(t) = 1$ | $\mu_{i,\text{close}}$ |
+| NORMAL | 其他时段 | $d_{\text{normal}}(t) = 1$ | $\mu_{i,\text{normal}}$ |
+
+**哑变量实现方式**：
+```
+μ_{i,period}(t) = μ_{i,open}·d_open(t) + μ_{i,mid}·d_mid(t) + μ_{i,close}·d_close(t) + μ_{i,normal}·d_normal(t)
+```
+
+其中任意时刻 $t$ 有且仅有一个哑变量取值为 1，其余为 0，确保基线强度的连续切换。这种分段常数近似能够捕捉开盘、午盘、收盘三个关键时段的事件聚集效应，同时保持 EM 算法闭式解的计算优势。
 
 ### Model C — 时变基线 μ + spread 外生项（加性）
 
@@ -103,9 +110,10 @@ $$\lambda_i(t) = \mu_{i,\text{period}(t)} + \gamma_{\text{spread},i} \cdot x^+(t
 - **EM 算法闭式解**：
   - **E-step**：计算责任变量 $p_{n,\text{base}}$, $p_{n,\text{spread}}$, $p_{n,\text{excitation}}$
   - **M-step**：所有参数均有闭式更新公式
-    - $\mu_{i,p} = \frac{\sum_{n:u_n=i,\text{period}(n)=p} p_{n,\text{base}}}{T_p}$
+    - $\mu_{i,p} = \frac{\sum_{n:u_n=i,\text{period}(n)=p} p_{n,\text{base}}}{T_p}$ （时变基线各时段独立更新）
     - $\alpha_{ij} = \frac{\sum_{n:u_n=i} \alpha_{ij} R_j[n] / \lambda_n}{N_j}$
     - $\gamma_{\text{spread},i} = \frac{\sum_{n:u_n=i} p_{n,\text{spread}}}{\int_0^T x^+(t) dt}$
+- **哑变量在EM中的处理**：每个时段 $p \in \{\text{open}, \text{mid}, \text{close}, \text{normal}\}$ 的基线强度 $\mu_{i,p}$ 独立更新，仅使用该时段内的事件计算充分统计量
 - **核函数**：$\varphi_{ij}(\Delta t) = \alpha_{ij} \cdot \omega \cdot e^{-\omega \cdot \Delta t}$，积分 $\int_0^\infty \varphi_{ij}(s)\,ds = \alpha_{ij}$
 - **衰减参数**：统一网格 $\omega \in \{0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 10.0, 15.0, 20.0\}$，三种模型使用相同网格
 - **稳定性约束**：要求分枝比 $\rho < 1$
