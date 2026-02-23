@@ -86,7 +86,9 @@ $$\lambda_i(t) = \mu_{i,\text{period}(t)} + \sum_{j=1}^{4} \sum_{t_k^j < t} \alp
 
 $$\lambda_i(t) = \mu_{i,\text{period}(t)} + \gamma_{\text{spread},i} \cdot x^+(t) + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \, e^{-\omega(t - t_k^j)}$$
 
-在 Model B 的基础上，将标准化价差变化率 $x^+(t) = \max(\text{spread}(t), 0)$ 纳入加性基线。$x^+(t)$ 经 z-score 标准化、非负平移、max=1 归一化处理。$\gamma_{\text{spread},i}$ 直接表示 spread 对强度的线性贡献。
+在 Model B 的基础上，将标准化价差变化率 $x^+(t) = \max(\text{spread}(t), 0)$ 纳入加性基线。
+$x^+(t)$ 经 z-score 标准化、非负平移、max=1 归一化处理。
+$\gamma_{\text{spread},i}$ 直接表示 spread 对强度的线性贡献。
 
 ---
 
@@ -115,7 +117,9 @@ $$\lambda_i(t) = \mu_{i,\text{period}(t)} + \gamma_{\text{spread},i} \cdot x^+(t
     - $\alpha_{ij} = \frac{\sum_{n:u_n=i} \alpha_{ij} R_j[n] / \lambda_n}{N_j}$
     - $\gamma_{\text{spread},i} = \frac{\sum_{n:u_n=i} p_{n,\text{spread}}}{\int_0^T x^+(t) dt}$
 - **哑变量在EM中的处理**：每个时段 $p \in \{\text{open}, \text{mid}, \text{close}, \text{normal}\}$ 的基线强度 $\mu_{i,p}$ 独立更新，仅使用该时段内的事件计算充分统计量
-- **核函数**：$\varphi_{ij}(\Delta t) = \alpha_{ij} \cdot \omega \cdot e^{-\omega \cdot \Delta t}$，积分 $\int_0^\infty \varphi_{ij}(s)\,ds = \alpha_{ij}$
+- **核函数**：
+$\varphi_{ij}(\Delta t) = \alpha_{ij} \cdot \omega \cdot e^{-\omega \cdot \Delta t}$ ,
+积分 $\int_0^\infty \varphi_{ij}(s)\,ds = \alpha_{ij}$
 - **衰减参数**：统一网格 $\omega \in \{0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 10.0, 15.0, 20.0\}$，三种模型使用相同网格
 - **稳定性约束**：要求分枝比 $\rho < 1$
 - **对数似然**：统一使用 `compute_loglikelihood` 计算，确保 A/B/C 三种模型的 LL/AIC/BIC 口径完全一致
