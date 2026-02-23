@@ -14,7 +14,7 @@
 ### 技术实现
 
 - **估计方法**：**EM 算法**，所有参数（μ, α, γ_spread）均有 **闭式 M-step 解**，无需数值优化
-- **基线模型**：**加性基线**：$\lambda_i(t) = \mu_i + \text{(intraday effects)} + \text{(spread effect)} + \text{(excitation)}$
+- **基线模型**：**加性基线**：$\lambda_i(t) = \mu_i + \text{intraday effects} + \text{spread effect} + \text{excitation}$
 - **外生变量构建**：spread 序列经 z-score 标准化、非负平移、max=1 归一化处理
 - **性能优化**：核心递推循环使用 **Cython 加速**（EM 递推、对数似然、GOF 残差），支持大规模数据
 - **口径一致性**：拟合、对数似然、GOF 残差三者使用 **完全统一** 的加性强度函数

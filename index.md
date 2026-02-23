@@ -44,6 +44,10 @@ $$\lambda_i(t) = \mu_{i,\text{period}(t)} + \gamma_{\text{spread},i} \cdot x^+(t
 
 其中 $\mu_{i,\text{period}(t)}$ 使用分段常数哑变量刻画日内时段效应。
 
+## 技术实现
+
+- **基线模型**：$\lambda_i(t) = \mu_i + \text{intraday effects} + \text{spread effect} + \text{excitation}$
+
 ---
 
 > **注意**：本页面已启用 MathJax 支持，所有数学公式应该正常渲染。如果仍有问题，请刷新页面或检查浏览器控制台。
