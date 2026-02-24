@@ -31,7 +31,7 @@ exclude:
   - "*.c"
   - "*.pyd"
   - data/
-  - results*/
+  - results_additive/*.json
   - __pycache__/
   - build/
   - .git/
