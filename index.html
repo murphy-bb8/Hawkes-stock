@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>多维 Hawkes 过程建模 | Hawkes-stock</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+</head>
+<body>
+
+<!-- ==================== NAV ==================== -->
+<nav class="top-nav" id="topNav">
+  <div class="nav-inner">
+    <a href="#hero" class="nav-brand">Hawkes-stock</a>
+    <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="#intro">简介</a></li>
+      <li><a href="#models">模型公式</a></li>
+      <li><a href="#method">估计方法</a></li>
+      <li><a href="#results">实验结果</a></li>
+      <li><a href="#visualizations">可视化</a></li>
+      <li><a href="#economics">经济学解读</a></li>
+      <li><a href="#code">代码结构</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ==================== HERO ==================== -->
+<header class="hero" id="hero">
+  <div class="hero-inner">
+    <h1>多维 Hawkes 过程建模</h1>
+    <p class="hero-subtitle">加性基线的 EM 算法实现</p>
+    <p class="hero-desc">
+      围绕 A 股限价订单簿中的有毒/无毒订单流，构建 4 维多元 Hawkes 过程模型，
+      使用加性基线的 EM 算法进行高效估计。
+    </p>
+    <div class="hero-badges">
+      <span class="badge badge-blue">EM 闭式解</span>
+      <span class="badge badge-green">45 只 A 股实盘</span>
+      <span class="badge badge-purple">Cython 加速</span>
+      <span class="badge badge-orange">100% 收敛率</span>
+    </div>
+    <div class="hero-actions">
+      <a href="#results" class="btn btn-primary">查看结果</a>
+      <a href="https://github.com/murphy-bb8/Hawkes-stock" class="btn btn-outline" target="_blank">GitHub 仓库</a>
+    </div>
+  </div>
+</header>
+
+<!-- ==================== KEY METRICS ==================== -->
+<section class="metrics-strip">
+  <div class="container">
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-value">45/45</div>
+        <div class="metric-label">AIC 最优 (Model C)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">45/45</div>
+        <div class="metric-label">BIC 最优 (Model C)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">100%</div>
+        <div class="metric-label">LL 单调性成立</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">135/135</div>
+        <div class="metric-label">EM 收敛率</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== MAIN ==================== -->
+<main class="container">
+
+<!-- 项目简介 -->
+<section id="intro" class="content-section">
+  <h2 class="section-title"><span class="section-icon">📋</span> 项目简介</h2>
+  <div class="card">
+    <p>本项目围绕 <strong>A 股限价订单簿中的有毒/无毒订单流</strong>，构建 <strong>4 维多元 Hawkes 过程</strong> 模型，使用 <strong>加性基线</strong> 的 EM 算法进行高效估计。相比传统的 log-link 乘性基线，加性基线具有闭式 M-step 解、计算更高效、参数解释更直观的优势。</p>
+
+    <h3>核心研究问题</h3>
+    <ol>
+      <li>不同价格水平的股票，其订单流自激励强度有何差异？</li>
+      <li>引入日内时段效应（开盘/午盘/收盘）能否改善基线强度的刻画？</li>
+      <li>引入价差变化率（re_spread）作为外生驱动项，能否进一步提升模型拟合？</li>
+    </ol>
+
+    <h3>技术实现</h3>
+    <div class="feature-grid">
+      <div class="feature-item">
+        <div class="feature-icon">🧮</div>
+        <div class="feature-text">
+          <strong>EM 算法闭式解</strong>
+          <span>所有参数（μ, α, γ<sub>spread</sub>）均有闭式 M-step 解，无需数值优化</span>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">➕</div>
+        <div class="feature-text">
+          <strong>加性基线模型</strong>
+          <span>$\lambda_i(t) = \mu_i + \text{intraday} + \text{spread} + \text{excitation}$</span>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-text">
+          <strong>Cython 加速</strong>
+          <span>核心递推循环高性能优化，支持 78 万+ 事件</span>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">📊</div>
+        <div class="feature-text">
+          <strong>三种递进模型</strong>
+          <span>Model A → B → C，逐步增加建模维度</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 研究对象 -->
+<section id="data" class="content-section">
+  <h2 class="section-title"><span class="section-icon">📦</span> 研究对象</h2>
+  <div class="card">
+    <div class="two-col">
+      <div>
+        <h3>数据概况</h3>
+        <ul>
+          <li><strong>样本期</strong>：2019 年 12 月（22 个交易日）</li>
+          <li><strong>股票数</strong>：45 只沪市 A 股</li>
+          <li><strong>分组依据</strong>：按月均价分为 High / Mid / Low 各 15 只</li>
+          <li><strong>事件总量</strong>：每只股票 10 万 ~ 78 万个事件（4 维合计）</li>
+          <li><strong>交易时段</strong>：每日 4 小时 = 14400 秒（9:30–11:30, 13:00–15:00）</li>
+        </ul>
+      </div>
+      <div>
+        <h3>4 个事件维度</h3>
+        <table>
+          <thead><tr><th>维度</th><th>缩写</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td><code>BT</code></td><td>Buy Toxic — 买方有毒订单</td></tr>
+            <tr><td>1</td><td><code>BN</code></td><td>Buy Not Toxic — 买方无毒订单</td></tr>
+            <tr><td>2</td><td><code>ST</code></td><td>Sell Toxic — 卖方有毒订单</td></tr>
+            <tr><td>3</td><td><code>SN</code></td><td>Sell Not Toxic — 卖方无毒订单</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 递进逻辑 -->
+<section class="content-section">
+  <h2 class="section-title"><span class="section-icon">🔗</span> 三种模型的递进关系</h2>
+  <div class="model-flow">
+    <div class="model-step">
+      <div class="model-step-header model-a">Model A</div>
+      <div class="model-step-body">
+        <strong>常数 μ</strong><br>
+        最简洁的基线假设<br>
+        无外生项<br>
+        <span class="param-count">k = 20</span>
+      </div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="model-step">
+      <div class="model-step-header model-b">Model B</div>
+      <div class="model-step-body">
+        <strong>时变 μ</strong><br>
+        引入日内时段结构<br>
+        γ<sub>open</sub> / γ<sub>mid</sub> / γ<sub>close</sub><br>
+        <span class="param-count">k = 32</span>
+      </div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="model-step">
+      <div class="model-step-header model-c">Model C</div>
+      <div class="model-step-body">
+        <strong>时变 μ + 外生项</strong><br>
+        引入市场微观结构变量<br>
+        + γ<sub>spread</sub>·x⁺(t)<br>
+        <span class="param-count">k = 36</span>
+      </div>
+    </div>
+  </div>
+  <p class="text-center text-muted">每一步都在前一步基础上增加建模维度，检验额外复杂度是否带来统计改善。统一使用加性基线口径 + 闭式 M-step 解。</p>
+</section>
+
+<!-- 模型公式 -->
+<section id="models" class="content-section">
+  <h2 class="section-title"><span class="section-icon">📐</span> 模型公式</h2>
+
+  <div class="card formula-card">
+    <h3>Model A — 常数基线 μ</h3>
+    <div class="formula-display">
+      $$\lambda_i(t) = \mu_i + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \, e^{-\omega(t - t_k^j)}$$
+    </div>
+    <p>最简洁的多元 Hawkes 模型。基线强度 $\mu_i$ 为常数，不随日内时间变化。</p>
+  </div>
+
+  <div class="card formula-card">
+    <h3>Model B — 时变基线 μ（日内时段效应）</h3>
+    <div class="formula-display">
+      $$\lambda_i(t) = \mu_{i,\text{period}(t)} + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \, e^{-\omega(t - t_k^j)}$$
+    </div>
+    <p>其中 $\mu_{i,\text{period}(t)}$ 使用分段常数哑变量刻画日内时段效应：</p>
+    <table>
+      <thead><tr><th>时段</th><th>时间范围</th><th>哑变量</th><th>基线强度</th></tr></thead>
+      <tbody>
+        <tr><td>OPEN30</td><td>9:30–10:00</td><td>$d_{\text{open}}(t)=1$</td><td>$\mu_{i,\text{open}}$</td></tr>
+        <tr><td>MID30</td><td>13:00–13:30</td><td>$d_{\text{mid}}(t)=1$</td><td>$\mu_{i,\text{mid}}$</td></tr>
+        <tr><td>CLOSE30</td><td>14:30–15:00</td><td>$d_{\text{close}}(t)=1$</td><td>$\mu_{i,\text{close}}$</td></tr>
+        <tr><td>NORMAL</td><td>其他时段</td><td>$d_{\text{normal}}(t)=1$</td><td>$\mu_{i,\text{normal}}$</td></tr>
+      </tbody>
+    </table>
+    <p>任意时刻有且仅有一个哑变量取值为 1，确保基线强度的连续切换。</p>
+  </div>
+
+  <div class="card formula-card">
+    <h3>Model C — 时变基线 μ + spread 外生项</h3>
+    <div class="formula-display">
+      $$\lambda_i(t) = \mu_{i,\text{period}(t)} + \gamma_{\text{spread},i} \cdot x^+(t) + \sum_{j=1}^{4} \sum_{t_k^j < t} \alpha_{ij} \, \omega \, e^{-\omega(t - t_k^j)}$$
+    </div>
+    <p>在 Model B 基础上，将标准化价差变化率 $x^+(t) = \max(\text{spread}(t), 0)$ 纳入加性基线。$\gamma_{\text{spread},i}$ 直接表示 spread 对强度的线性贡献。</p>
+  </div>
+
+  <!-- 参数含义总表 -->
+  <div class="card">
+    <h3>参数含义总表</h3>
+    <div class="table-responsive">
+    <table>
+      <thead>
+        <tr><th>参数</th><th>符号</th><th>含义</th><th>A</th><th>B</th><th>C</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>基线强度</td><td>$\mu_i$</td><td>第 $i$ 维的背景事件到达率</td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td>激励矩阵</td><td>$\alpha_{ij}$</td><td>第 $j$ 维事件对第 $i$ 维的激励系数</td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td>衰减参数</td><td>$\omega$</td><td>激励效应的指数衰减速率</td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td>分枝比</td><td>$\rho(\alpha/\omega)$</td><td>谱半径，$&lt;1$ 保证平稳性</td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td>开盘效应</td><td>$\mu_{i,\text{open}}$</td><td>开盘 30 min 基线强度</td><td>—</td><td>✓</td><td>✓</td></tr>
+        <tr><td>午盘效应</td><td>$\mu_{i,\text{mid}}$</td><td>午盘 30 min 基线强度</td><td>—</td><td>✓</td><td>✓</td></tr>
+        <tr><td>收盘效应</td><td>$\mu_{i,\text{close}}$</td><td>收盘 30 min 基线强度</td><td>—</td><td>✓</td><td>✓</td></tr>
+        <tr><td>价差外生项</td><td>$\gamma_{\text{spread},i}$</td><td>标准化 spread 的线性系数</td><td>—</td><td>—</td><td>✓</td></tr>
+        <tr><td>参数个数</td><td>$k$</td><td>自由参数总数</td><td>20</td><td>32</td><td>36</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- 估计方法 -->
+<section id="method" class="content-section">
+  <h2 class="section-title"><span class="section-icon">⚙️</span> 估计方法</h2>
+  <div class="card">
+    <h3>EM 算法闭式解</h3>
+    <div class="two-col">
+      <div>
+        <h4>E-step</h4>
+        <p>计算责任变量 $p_{n,\text{base}}$, $p_{n,\text{spread}}$, $p_{n,\text{excitation}}$</p>
+      </div>
+      <div>
+        <h4>M-step（闭式更新）</h4>
+        <div class="formula-display formula-sm">
+          $$\mu_{i,p} = \frac{\sum_{n:u_n=i,\text{period}(n)=p} p_{n,\text{base}}}{T_p}$$
+        </div>
+        <div class="formula-display formula-sm">
+          $$\alpha_{ij} = \frac{\sum_{n:u_n=i} \alpha_{ij} R_j[n] / \lambda_n}{N_j}$$
+        </div>
+        <div class="formula-display formula-sm">
+          $$\gamma_{\text{spread},i} = \frac{\sum_{n:u_n=i} p_{n,\text{spread}}}{\int_0^T x^+(t) dt}$$
+        </div>
+      </div>
+    </div>
+
+    <h4 style="margin-top:1.5rem;">核函数</h4>
+    <div class="formula-display">
+      $$\varphi_{ij}(\Delta t) = \alpha_{ij} \cdot \omega \cdot e^{-\omega \cdot \Delta t}, \qquad \int_0^\infty \varphi_{ij}(s)\,ds = \alpha_{ij}$$
+    </div>
+
+    <div class="info-grid">
+      <div class="info-item"><strong>衰减参数网格</strong><br>$\omega \in \{0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 10.0, 15.0, 20.0\}$</div>
+      <div class="info-item"><strong>稳定性约束</strong><br>分枝比 $\rho < 1$</div>
+      <div class="info-item"><strong>数据使用</strong><br>全量数据拟合（无子采样）</div>
+      <div class="info-item"><strong>递推一致性</strong><br>EM / LL / GOF 使用同一套加性强度函数</div>
+    </div>
+  </div>
+</section>
+
+<!-- GOF -->
+<section class="content-section">
+  <h2 class="section-title"><span class="section-icon">✅</span> GOF v2 评估体系</h2>
+  <div class="card">
+    <p>三种模型使用 <strong>完全统一</strong> 的拟合优度评估框架，基于时间重标残差（time-rescaling residuals）：</p>
+    <blockquote>若模型正确，则重标残差 $r_k = \Lambda_i(t_k) - \Lambda_i(t_{k-1})$ 应服从 $\text{Exp}(1)$ 分布，且相互独立。</blockquote>
+    <div class="table-responsive">
+    <table>
+      <thead><tr><th>指标</th><th>符号</th><th>含义</th><th>理想值</th></tr></thead>
+      <tbody>
+        <tr><td>综合评分</td><td>GOF Score</td><td>$0.3 S_{\text{mean}} + 0.3 S_{W_1} + 0.2 S_{\text{LB}} + 0.2 S_{\text{ACF}}$</td><td>→ 1</td></tr>
+        <tr><td>残差均值偏差</td><td>$|E[r]-1|$</td><td>均值偏离 Exp(1) 理论值</td><td>→ 0</td></tr>
+        <tr><td>Wasserstein-1</td><td>$W_1$</td><td>分布距离（Earth Mover's）</td><td>→ 0</td></tr>
+        <tr><td>QQ-MAE</td><td>—</td><td>QQ 线偏离 45° 线</td><td>→ 0</td></tr>
+        <tr><td>Ljung-Box</td><td>LB Pass</td><td>残差独立性检验（lag 5/10/20）</td><td>Pass</td></tr>
+        <tr><td>ACF</td><td>—</td><td>自相关函数（lag 1~20）</td><td>→ 0</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- 实验结果 -->
+<section id="results" class="content-section">
+  <h2 class="section-title"><span class="section-icon">📊</span> 实验结果</h2>
+
+  <!-- 分枝比 -->
+  <div class="card">
+    <h3>分枝比（Branching Ratio）</h3>
+    <div class="table-responsive">
+    <table class="highlight-table">
+      <thead><tr><th>价格组</th><th>Model A</th><th>Model B</th><th>Model C</th></tr></thead>
+      <tbody>
+        <tr><td><strong>High</strong></td><td>0.610 ± 0.047</td><td>0.608 ± 0.047</td><td>0.608 ± 0.047</td></tr>
+        <tr><td><strong>Mid</strong></td><td>0.683 ± 0.045</td><td>0.681 ± 0.044</td><td>0.681 ± 0.044</td></tr>
+        <tr><td><strong>Low</strong></td><td>0.759 ± 0.034</td><td>0.757 ± 0.034</td><td>0.757 ± 0.034</td></tr>
+        <tr class="row-highlight"><td>全部稳定 (BR&lt;1)</td><td>45/45 ✓</td><td>45/45 ✓</td><td>45/45 ✓</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout">
+      <strong>解读：</strong>分枝比一致呈现 <strong>High (0.61) &lt; Mid (0.68) &lt; Low (0.76)</strong> 的梯度，低价股自激励更强。所有 45 只股票在三种模型下均满足平稳性条件。
+    </div>
+  </div>
+
+  <!-- LL/AIC/BIC -->
+  <div class="card">
+    <h3>对数似然与模型选择</h3>
+    <div class="table-responsive">
+    <table class="highlight-table">
+      <thead><tr><th>指标</th><th>Model A (k=20)</th><th>Model B (k=32)</th><th>Model C (k=36)</th></tr></thead>
+      <tbody>
+        <tr><td><strong>LL 单调性</strong></td><td>基准</td><td>LL<sub>B</sub> ≥ LL<sub>A</sub> ✓ (45/45)</td><td>LL<sub>C</sub> ≥ LL<sub>B</sub> ✓ (45/45)</td></tr>
+        <tr><td><strong>LL 提升 (B−A)</strong></td><td>—</td><td>+4,416 ± 2,483</td><td>—</td></tr>
+        <tr><td><strong>LL 提升 (C−B)</strong></td><td>—</td><td>—</td><td>+30 ± 158</td></tr>
+        <tr class="row-highlight"><td><strong>AIC 最优</strong></td><td>0/45</td><td>0/45</td><td class="text-winner">45/45 (100%)</td></tr>
+        <tr class="row-highlight"><td><strong>BIC 最优</strong></td><td>0/45</td><td>0/45</td><td class="text-winner">45/45 (100%)</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout callout-success">
+      <strong>关键发现：</strong>LL 单调性 100% 成立，AIC/BIC 一致选择 Model C，即使考虑参数惩罚，外生 spread 仍显著改善拟合。
+    </div>
+  </div>
+
+  <!-- GOF Score -->
+  <div class="card">
+    <h3>GOF 综合评分</h3>
+    <div class="table-responsive">
+    <table>
+      <thead><tr><th>价格组</th><th>Model A</th><th>Model B</th><th>Model C</th></tr></thead>
+      <tbody>
+        <tr><td><strong>High</strong></td><td>0.609</td><td>0.606</td><td>0.606</td></tr>
+        <tr><td><strong>Mid</strong></td><td>0.568</td><td>0.565</td><td>0.565</td></tr>
+        <tr><td><strong>Low</strong></td><td>0.542</td><td>0.542</td><td>0.541</td></tr>
+        <tr class="row-highlight"><td>均值</td><td>0.573</td><td>0.571</td><td>0.571</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- 日内时段 -->
+  <div class="card">
+    <h3>日内时段效应（Model B 组均值）</h3>
+    <p>$\mu_{i,\text{period}}$ 直接表示各时段的背景事件到达率（单位：事件/秒）。</p>
+    <div class="table-responsive">
+    <table>
+      <thead><tr><th>组</th><th>时段</th><th>BT</th><th>BN</th><th>ST</th><th>SN</th><th>倍率</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="3"><strong>High</strong></td><td>开盘</td><td class="text-winner">0.203</td><td class="text-winner">0.295</td><td class="text-winner">0.194</td><td class="text-winner">0.285</td><td>1.3–1.4×</td></tr>
+        <tr><td>午盘</td><td>0.146</td><td>0.208</td><td>0.140</td><td>0.199</td><td>≈ 1.0×</td></tr>
+        <tr><td>收盘</td><td>0.146</td><td>0.208</td><td>0.140</td><td>0.199</td><td>≈ 1.0×</td></tr>
+        <tr><td rowspan="3"><strong>Mid</strong></td><td>开盘</td><td class="text-winner">0.177</td><td class="text-winner">0.347</td><td class="text-winner">0.170</td><td class="text-winner">0.338</td><td>1.2–1.3×</td></tr>
+        <tr><td>午盘</td><td>0.137</td><td>0.274</td><td>0.132</td><td>0.267</td><td>≈ 1.0×</td></tr>
+        <tr><td>收盘</td><td>0.137</td><td>0.274</td><td>0.132</td><td>0.267</td><td>≈ 1.0×</td></tr>
+        <tr><td rowspan="3"><strong>Low</strong></td><td>开盘</td><td class="text-winner">0.038</td><td class="text-winner">0.361</td><td class="text-winner">0.032</td><td class="text-winner">0.304</td><td>1.2–1.3×</td></tr>
+        <tr><td>午盘</td><td>0.031</td><td>0.301</td><td>0.026</td><td>0.254</td><td>≈ 1.0×</td></tr>
+        <tr><td>收盘</td><td>0.031</td><td>0.301</td><td>0.026</td><td>0.254</td><td>≈ 1.0×</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout">
+      <strong>规律：</strong>开盘效应一致且显著（1.2–1.4 倍），午盘和收盘接近零。低价股 Toxic 维度背景强度极低。
+    </div>
+  </div>
+
+  <!-- 激励矩阵 -->
+  <div class="card">
+    <h3>激励矩阵 A 结构（Model C 组均值）</h3>
+    <div class="matrix-grid">
+      <div>
+        <h4>High Price 组</h4>
+        <table class="matrix-table">
+          <thead><tr><th></th><th>→ BT</th><th>→ BN</th><th>→ ST</th><th>→ SN</th></tr></thead>
+          <tbody>
+            <tr><td><strong>BT →</strong></td><td class="cell-hot">0.631</td><td>0.000</td><td>0.000</td><td>0.009</td></tr>
+            <tr><td><strong>BN →</strong></td><td>0.000</td><td class="cell-hot">0.565</td><td>0.010</td><td>0.000</td></tr>
+            <tr><td><strong>ST →</strong></td><td>0.000</td><td>0.009</td><td class="cell-hot">0.611</td><td>0.000</td></tr>
+            <tr><td><strong>SN →</strong></td><td>0.010</td><td>0.000</td><td>0.000</td><td class="cell-hot">0.574</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <h4>Mid Price 组</h4>
+        <table class="matrix-table">
+          <thead><tr><th></th><th>→ BT</th><th>→ BN</th><th>→ ST</th><th>→ SN</th></tr></thead>
+          <tbody>
+            <tr><td><strong>BT →</strong></td><td class="cell-hot">0.724</td><td>0.000</td><td>0.000</td><td>0.010</td></tr>
+            <tr><td><strong>BN →</strong></td><td>0.000</td><td class="cell-hot">0.593</td><td>0.011</td><td>0.000</td></tr>
+            <tr><td><strong>ST →</strong></td><td>0.000</td><td>0.018</td><td class="cell-hot">0.712</td><td>0.000</td></tr>
+            <tr><td><strong>SN →</strong></td><td>0.019</td><td>0.001</td><td>0.001</td><td class="cell-hot">0.614</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <h4>Low Price 组</h4>
+        <table class="matrix-table">
+          <thead><tr><th></th><th>→ BT</th><th>→ BN</th><th>→ ST</th><th>→ SN</th></tr></thead>
+          <tbody>
+            <tr><td><strong>BT →</strong></td><td class="cell-hot">0.787</td><td>0.000</td><td>0.000</td><td>0.001</td></tr>
+            <tr><td><strong>BN →</strong></td><td>0.000</td><td class="cell-hot">0.451</td><td>0.002</td><td>0.000</td></tr>
+            <tr><td><strong>ST →</strong></td><td>0.000</td><td>0.002</td><td class="cell-hot">0.792</td><td>0.000</td></tr>
+            <tr><td><strong>SN →</strong></td><td>0.003</td><td>0.004</td><td>0.000</td><td class="cell-hot">0.525</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="callout">
+      <strong>结构特征：</strong>对角线主导（自激励 ≫ 交叉激励），Toxic 维度自激励更强，低价股自激励更强，交叉激励接近零。
+    </div>
+  </div>
+
+  <!-- 基线强度 -->
+  <div class="card">
+    <h3>基线强度 μ 组均值（Model C）</h3>
+    <div class="table-responsive">
+    <table>
+      <thead><tr><th>组</th><th>μ<sub>BT</sub></th><th>μ<sub>BN</sub></th><th>μ<sub>ST</sub></th><th>μ<sub>SN</sub></th><th>特征</th></tr></thead>
+      <tbody>
+        <tr><td><strong>High</strong></td><td>0.197</td><td>0.300</td><td>0.198</td><td>0.289</td><td>BN &gt; SN &gt; BT ≈ ST</td></tr>
+        <tr><td><strong>Mid</strong></td><td>0.137</td><td>0.274</td><td>0.132</td><td>0.267</td><td>BN &gt; SN &gt; BT ≈ ST</td></tr>
+        <tr><td><strong>Low</strong></td><td>0.031</td><td>0.301</td><td>0.026</td><td>0.254</td><td>BN ≫ SN ≫ BT ≈ ST</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout">
+      Non-Toxic 维度背景强度远高于 Toxic 维度。低价股 Toxic 背景强度极低，有毒订单几乎完全由自激励驱动。
+    </div>
+  </div>
+</section>
+
+<!-- 可视化 -->
+<section id="visualizations" class="content-section">
+  <h2 class="section-title"><span class="section-icon">🎨</span> 核心可视化</h2>
+
+  <div class="viz-grid">
+    <div class="viz-card">
+      <h4>LL / AIC / BIC 对比</h4>
+      <img src="results_additive/model_comparison_ll_aic_bic.png" alt="三模型 LL/AIC/BIC 对比柱状图" loading="lazy">
+    </div>
+    <div class="viz-card">
+      <h4>分枝比分布</h4>
+      <img src="results_additive/branching_ratio_boxplot.png" alt="分枝比分布箱线图" loading="lazy">
+    </div>
+    <div class="viz-card">
+      <h4>GOF 评分热力图</h4>
+      <img src="results_additive/gof_score_heatmap.png" alt="GOF 评分热力图" loading="lazy">
+    </div>
+    <div class="viz-card">
+      <h4>激励矩阵热力图</h4>
+      <img src="results_additive/excitation_matrix_heatmaps.png" alt="激励矩阵组均值热力图" loading="lazy">
+    </div>
+    <div class="viz-card">
+      <h4>日内时段效应（Model C）</h4>
+      <img src="results_additive/gamma_bar_modelC.png" alt="Model C 日内时段效应条形图" loading="lazy">
+    </div>
+    <div class="viz-card">
+      <h4>Spread 效应</h4>
+      <img src="results_additive/gamma_spread_bar.png" alt="Model C spread 效应条形图" loading="lazy">
+    </div>
+    <div class="viz-card">
+      <h4>LL 单调性散点图</h4>
+      <img src="results_additive/ll_monotonicity_scatter.png" alt="LL 单调性散点图" loading="lazy">
+    </div>
+    <div class="viz-card">
+      <h4>AIC / BIC 改进量</h4>
+      <img src="results_additive/aic_bic_improvement.png" alt="AIC/BIC 改进量箱线图" loading="lazy">
+    </div>
+    <div class="viz-card viz-card-wide">
+      <h4>代表股票 GOF QQ 图</h4>
+      <img src="results_additive/gof_qq_plot_sample.png" alt="代表股票 GOF QQ 图" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<!-- 综合结论 -->
+<section class="content-section">
+  <h2 class="section-title"><span class="section-icon">🏆</span> 综合结论</h2>
+  <div class="card">
+    <h3>三种模型的优劣总结</h3>
+    <div class="table-responsive">
+    <table class="highlight-table">
+      <thead><tr><th>维度</th><th>Model A (k=20)</th><th>Model B (k=32)</th><th>Model C (k=36)</th></tr></thead>
+      <tbody>
+        <tr><td><strong>复杂度</strong></td><td>最低</td><td>中等</td><td>最高</td></tr>
+        <tr><td><strong>LL 单调性</strong></td><td>基准</td><td>LL<sub>B</sub> ≥ LL<sub>A</sub> (100%)</td><td>LL<sub>C</sub> ≥ LL<sub>B</sub> (100%)</td></tr>
+        <tr><td><strong>AIC 最优</strong></td><td>0/45</td><td>0/45</td><td class="text-winner">45/45 (100%)</td></tr>
+        <tr><td><strong>BIC 最优</strong></td><td>0/45</td><td>0/45</td><td class="text-winner">45/45 (100%)</td></tr>
+        <tr><td><strong>GOF 评分</strong></td><td>0.573</td><td>0.571</td><td>0.571</td></tr>
+        <tr><td><strong>适用场景</strong></td><td>基准对比</td><td>日内时段分析</td><td class="text-winner">推荐默认选择</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>核心发现</h3>
+    <div class="findings-grid">
+      <div class="finding-card">
+        <div class="finding-num">1</div>
+        <div class="finding-body">
+          <strong>Model C 是最佳模型</strong>
+          <p>AIC/BIC 均以 100% 比例选择 Model C。LL 单调性 $\text{LL}_C \geq \text{LL}_B \geq \text{LL}_A$ 在所有 45 只股票上 100% 成立。</p>
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">2</div>
+        <div class="finding-body">
+          <strong>Spread 外生项贡献显著但有限</strong>
+          <p>$\gamma_{\text{spread}}$ 解释清晰，但 Model C 相对 B 的 LL 提升较小（+30），说明在加性基线下 spread 的边际贡献有限。</p>
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">3</div>
+        <div class="finding-body">
+          <strong>价格效应最稳健</strong>
+          <p>分枝比：High (0.61) &lt; Mid (0.68) &lt; Low (0.76)。低价股自激励更强，Toxic 维度拟合难度大于 Non-Toxic。</p>
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">4</div>
+        <div class="finding-body">
+          <strong>开盘效应唯一显著</strong>
+          <p>开盘 30 分钟事件到达率为基准的 1.2–1.4 倍，午盘和收盘无显著差异。</p>
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">5</div>
+        <div class="finding-body">
+          <strong>收敛率 100%</strong>
+          <p>EM 算法在所有 135 次拟合中全部收敛，无任何拟合失败。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 经济学解读 -->
+<section id="economics" class="content-section">
+  <h2 class="section-title"><span class="section-icon">💡</span> 经济学解读</h2>
+
+  <div class="card">
+    <h3>一、订单流自激励与市场微观结构</h3>
+
+    <h4>1. 有毒订单的"传染性"远强于无毒订单</h4>
+    <p>三种模型一致显示，<strong>Toxic 维度（BT/ST）的自激励系数显著高于 Non-Toxic 维度（BN/SN）</strong>。</p>
+    <div class="callout">
+      <strong>经济学含义：</strong>有毒订单（informed trading）具有更强的"传染效应"——知情交易者倾向于在信息优势消散前集中下单（strategic order splitting），形成订单簇聚。
+    </div>
+
+    <h4>2. 低价股的"自激励陷阱"</h4>
+    <p>分枝比随价格降低单调递增：High 0.61 → Mid 0.68 → Low 0.76。</p>
+    <div class="callout">
+      <strong>经济学含义：</strong>
+      <ul>
+        <li><strong>流动性差异</strong>：低价股订单簿深度浅、买卖价差大，单笔订单价格冲击更大</li>
+        <li><strong>信息不对称</strong>：低价股分析师覆盖少、信息透明度低，知情交易者信息优势更持久</li>
+        <li><strong>背景强度特征</strong>：低价股 $\mu_{\text{BN}} = 0.308 \gg \mu_{\text{BT}} = 0.036$，无毒订单由背景驱动，有毒订单由自激励驱动</li>
+      </ul>
+    </div>
+
+    <h4>3. 背景强度 μ 揭示的流动性结构</h4>
+    <p>低价股 Toxic 背景强度极低（μ<sub>BT</sub> ≈ 0.036, μ<sub>ST</sub> ≈ 0.029），有毒订单几乎不存在"自发到达"，而完全由自激励驱动。高价股 μ 更均衡，反映订单簿生态更健康。</p>
+  </div>
+
+  <div class="card">
+    <h3>二、日内时段效应的市场行为解读</h3>
+
+    <h4>1. 开盘效应：信息释放与流动性竞争</h4>
+    <div class="callout callout-info">
+      <strong>隔夜信息消化：</strong>A 股实行 T+1 交易制度，隔夜积累的信息在开盘时集中释放。开盘阶段是价格发现最活跃的时段。
+    </div>
+
+    <h4>2. 午盘效应接近零</h4>
+    <p>$|\gamma_{\text{mid}}| < 0.1$，1.5 小时的午休不足以产生类似隔夜的信息冲击。</p>
+
+    <h4>3. 收盘效应的分化</h4>
+    <p>Non-Toxic 维度略升（做市商收盘前调仓），Toxic 维度在低价股中略降（知情交易者已完成交易 / 监管关注度更高）。</p>
+  </div>
+
+  <div class="card">
+    <h3>三、Model C 的 γ<sub>spread</sub> 解释</h3>
+    <div class="table-responsive">
+    <table>
+      <thead><tr><th>组</th><th>BT γ</th><th>BN γ</th><th>ST γ</th><th>SN γ</th><th>解读</th></tr></thead>
+      <tbody>
+        <tr><td><strong>High</strong></td><td class="text-negative">-0.003</td><td>-0.001</td><td class="text-negative">-0.002</td><td>-0.001</td><td>Toxic 线性下降</td></tr>
+        <tr><td><strong>Mid</strong></td><td>-0.002</td><td>0.000</td><td>-0.001</td><td>0.000</td><td>影响微弱</td></tr>
+        <tr><td><strong>Low</strong></td><td>0.000</td><td>0.001</td><td>0.000</td><td>0.001</td><td>几乎无影响</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout">
+      <strong>解读：</strong>价差扩大 → 有毒订单减少（交易成本上升）。高价股敏感度最强，反映流动性更好、价差信号作用更强。
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>四、模型选择的实践启示</h3>
+    <div class="table-responsive">
+    <table>
+      <thead><tr><th>应用场景</th><th>推荐模型</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td>订单流预测</td><td class="text-winner">Model C</td><td>AIC/BIC 最优</td></tr>
+        <tr><td>交易成本分析（TCA）</td><td class="text-winner">Model C</td><td>γ<sub>spread</sub> 直接量化价差影响</td></tr>
+        <tr><td>市场监控 / 异常检测</td><td>Model A</td><td>最简洁，分枝比直接反映自激励强度</td></tr>
+        <tr><td>做市策略优化</td><td class="text-winner">Model C</td><td>同时考虑日内时段和价差效应</td></tr>
+        <tr><td>学术研究 / 基准对比</td><td>A → B → C</td><td>递进对比，展示边际贡献</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>五、研究局限与未来方向</h3>
+    <ol>
+      <li><strong>样本期较短</strong>：仅使用 2019 年 12 月数据，结论的时间稳健性有待验证</li>
+      <li><strong>衰减参数固定</strong>：$\omega$ 通过网格搜索选取但在组内固定，未来可考虑个股级别估计</li>
+      <li><strong>交叉激励稀疏</strong>：可尝试结构化约束（对称性、稀疏性先验）</li>
+      <li><strong>外生变量选择</strong>：可引入更多微观结构变量（OBI、log_opp_depth 等）</li>
+      <li><strong>非参数基线</strong>：可考虑核平滑或样条基线替代分段常数</li>
+    </ol>
+  </div>
+</section>
+
+<!-- 代码结构 -->
+<section id="code" class="content-section">
+  <h2 class="section-title"><span class="section-icon">📁</span> 代码结构与运行</h2>
+  <div class="card">
+    <div class="two-col">
+      <div>
+        <h3>目录结构</h3>
+        <pre><code>full_test/
+├─ hawkes_em_additive.py       # 核心模块
+├─ run_experiment_additive.py  # 实盘实验入口
+├─ data/
+│  ├─ high_price_events/       # 高价组 15 只
+│  ├─ mid_price_events/        # 中价组 15 只
+│  └─ low_price_events/        # 低价组 15 只
+├─ results_additive/           # 实验结果输出
+│  ├─ experiment_results.json
+│  ├─ experiment_summary.json
+│  └─ *.png                    # 可视化图表
+└─ README.md</code></pre>
+      </div>
+      <div>
+        <h3>运行方式</h3>
+        <pre><code>conda activate py385
+
+# 加性基线实盘实验
+python run_experiment_additive.py
+
+# 查看结果
+# results_additive/experiment_results.json
+# results_additive/experiment_summary.json
+# results_additive/*.png</code></pre>
+
+        <h3>环境依赖</h3>
+        <pre><code>Python 3.8.5+
+numpy, scipy, matplotlib, cython</code></pre>
+      </div>
+    </div>
+
+    <h3 style="margin-top:1.5rem;">性能</h3>
+    <div class="table-responsive">
+    <table>
+      <thead><tr><th>模型</th><th>平均单股耗时</th><th>总耗时 (45 只)</th></tr></thead>
+      <tbody>
+        <tr><td>Model A</td><td>~5s</td><td>~225s</td></tr>
+        <tr><td>Model B</td><td>~5s</td><td>~225s</td></tr>
+        <tr><td>Model C</td><td>~10s</td><td>~450s</td></tr>
+        <tr class="row-highlight"><td><strong>合计</strong></td><td>—</td><td><strong>~900s ≈ 15min</strong></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- 参考文献 -->
+<section class="content-section">
+  <h2 class="section-title"><span class="section-icon">📚</span> 参考文献</h2>
+  <div class="card references">
+    <ol>
+      <li>Hawkes, A. G. (1971). Spectra of some self-exciting and mutually exciting point processes. <em>Biometrika</em>, 58(1), 83–90.</li>
+      <li>Bacry, E., Mastromatteo, I., &amp; Muzy, J. F. (2015). Hawkes processes in finance. <em>Market Microstructure and Liquidity</em>, 1(01).</li>
+      <li>Lewis, E., &amp; Mohler, G. (2011). A nonparametric EM algorithm for multiscale Hawkes processes. <em>Preprint</em>.</li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="site-footer">
+  <div class="container">
+    <p>Hawkes-stock &copy; 2025 &mdash; 多维 Hawkes 过程建模：加性基线的 EM 算法实现</p>
+    <p><a href="https://github.com/murphy-bb8/Hawkes-stock" target="_blank">GitHub</a></p>
+  </div>
+</footer>
+
+<!-- Back to top -->
+<a href="#hero" class="back-to-top" id="backToTop" aria-label="Back to top">&uarr;</a>
+
+<script>
+(function(){
+  // Sticky nav
+  const nav = document.getElementById('topNav');
+  const hero = document.getElementById('hero');
+  const toggle = document.getElementById('navToggle');
+  const links = document.getElementById('navLinks');
+
+  window.addEventListener('scroll', function(){
+    nav.classList.toggle('scrolled', window.scrollY > 60);
+    document.getElementById('backToTop').classList.toggle('visible', window.scrollY > 400);
+  });
+
+  toggle.addEventListener('click', function(){
+    links.classList.toggle('open');
+    toggle.classList.toggle('active');
+  });
+
+  // Smooth scroll & close mobile menu
+  document.querySelectorAll('.nav-links a, .hero-actions a[href^="#"]').forEach(function(a){
+    a.addEventListener('click', function(e){
+      var href = this.getAttribute('href');
+      if(href && href.startsWith('#')){
+        e.preventDefault();
+        var target = document.querySelector(href);
+        if(target){
+          var offset = nav.offsetHeight + 12;
+          var top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+          window.scrollTo({top:top, behavior:'smooth'});
+        }
+        links.classList.remove('open');
+        toggle.classList.remove('active');
+      }
+    });
+  });
+
+  // Intersection observer for fade-in
+  if('IntersectionObserver' in window){
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target); }
+      });
+    }, {threshold:0.08});
+    document.querySelectorAll('.content-section, .viz-card, .metric-card, .finding-card').forEach(function(el){
+      el.classList.add('fade-in');
+      obs.observe(el);
+    });
+  }
+})();
+</script>
+</body>
+</html>

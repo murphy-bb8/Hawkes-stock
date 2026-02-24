@@ -1,4 +1,8 @@
-# Python
+# ============================================================
+# 只推送加性基线相关代码 + GitHub Pages 文件
+# ============================================================
+
+# ---------- Python 通用 ----------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -7,40 +11,94 @@ __pycache__/
 dist/
 build/
 *.egg
-
-# Virtual environments
 .venv/
 venv/
 env/
 
-# IDE
+# ---------- IDE / OS ----------
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# Temporary / intermediate data
-temp/
-
-# Windsurf
 .windsurf/
 
-# Large data files (exceed GitHub 100MB limit)
+# ---------- 大数据文件 ----------
 data/
 events_sim_1d.json
 events_100k.json
 
-# Generated HTML (exclude specific patterns but allow Jekyll)
-*.html
-!_layouts/
-!_includes/
-!_sass/
-!_site/
-!assets/
+# ---------- Cython 编译产物（保留 .pyx 源码）----------
+*.c
+*.pyd
+setup_cy.py
+setup_cython.py
+setup_loglink.py
+
+# ---------- 旧版 Hawkes 模块（非加性基线）----------
+hawkes_em.py
+hawkes_em_loglink.py
+hawkes_4d_tick.py
+hawkes_4d_tick_exog.py
+hawkes_cy_loglink.*
+mhp.py
+MHP_fixed_final_play.py
+
+# ---------- 旧版实验 / 拟合脚本 ----------
+run_experiment.py
+run_4d_models.py
+fit_toxic_events.py
+fit_price_groups_4d.py
+fit_price_groups_4d_exog.py
+fit_toxic_events_1d_noexo_exp.py
+full_vs_simple_1d.py
+simulate_and_fit_1d.py
+
+# ---------- 旧版分析 / 测试 / Demo ----------
+analyze_results.py
+analyze_additive_results.py
+summarize_results.py
+demo_abc.py
+_extract_stats.py
+test_*.py
+test-mathjax.md
+
+# ---------- 旧版结果目录 ----------
+results_em/
+results_exog_em/
+results_noexog_em/
+exo-intraday/
+
+# ---------- 旧版 JSON 结果文件 ----------
+baseline_comparison_results.json
+demo_abc_results.json
+experiment_results.json
+test_small_batch_results.json
+simulation_1d_additive_results.json
+
+# ---------- 加性基线结果：只保留 PNG 图片 ----------
+results_additive/*.json
+
+# ---------- 旧版 Jekyll / Pages ----------
+index.md
+Gemfile
+Gemfile.lock
+temp/
 out/
+
+# ============================================================
+# 保留的文件清单（不忽略）：
+#   hawkes_em_additive.py        核心加性基线 EM 模块
+#   run_experiment_additive.py   45 只股票实验入口
+#   run_small_test_additive.py   小规模测试脚本
+#   _hawkes_cy.pyx               Cython 递推源码
+#   _hawkes_cython.pyx           Cython 递推源码
+#   results_additive/*.png       全部可视化图表
+#   index.html                   GitHub Pages 主页
+#   assets/                      CSS / JS 资源
+#   _config.yml                  Jekyll 配置
+#   README.md                    项目文档
+# ============================================================
