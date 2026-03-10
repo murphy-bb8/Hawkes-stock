@@ -34,13 +34,17 @@ MODEL_COLORS = {"A": "#1f77b4", "B": "#ff7f0e", "C": "#2ca02c"}
 
 # ===================== 数据加载 =====================
 
+EXOG_VARS = ["OBI", "log_opp_depth"]
+
+
 def load_and_build(path: str):
-    """加载 JSON 并构建 4D 事件/日内时间/spread 列表"""
+    """加载 JSON 并构建 4D 事件/日内时间/多外生变量列表"""
     with open(path, "r", encoding="utf-8") as f:
         raw = json.load(f)
 
     et_keys = ["buy_toxic", "buy_not_toxic", "sell_toxic", "sell_not_toxic"]
-    events_list, intra_list, spread_list = [], [], []
+    events_list, intra_list = [], []
+    exog_dict = {v: [] for v in EXOG_VARS}
 
     first_et = raw.get("events", {}).get(et_keys[0], {})
     dates_set = set()
@@ -50,7 +54,8 @@ def load_and_build(path: str):
 
     for et in et_keys:
         evts = raw.get("events", {}).get(et, {})
-        t_off, t_intra, sp_vals = [], [], []
+        t_off, t_intra = [], []
+        var_vals = {v: [] for v in EXOG_VARS}
         if isinstance(evts, dict) and "days" in evts:
             days = evts["days"]
             dates = sorted(set(d.get("date", "") for d in days if isinstance(d, dict)))
@@ -60,18 +65,21 @@ def load_and_build(path: str):
                     continue
                 offset = d_idx.get(dd.get("date", ""), 0) * TRADING_SECONDS_PER_DAY
                 ts = dd["t"]
-                rs = dd.get("re_spread", [None] * len(ts))
-                for ti, ri in zip(ts, rs):
+                raw_vars = {v: dd.get(v, [None] * len(ts)) for v in EXOG_VARS}
+                for idx_t, ti in enumerate(ts):
                     if not isinstance(ti, (int, float)):
                         continue
                     t_id = float(ti)
                     t_off.append(offset + intraday_to_trading_time(t_id))
                     t_intra.append(t_id)
-                    sp_val = float(ri) if isinstance(ri, (int, float)) else 0.0
-                    sp_vals.append(sp_val)
+                    for v in EXOG_VARS:
+                        rv = raw_vars[v]
+                        val = rv[idx_t] if idx_t < len(rv) else None
+                        var_vals[v].append(float(val) if isinstance(val, (int, float)) else 0.0)
         events_list.append(np.asarray(t_off, dtype=float))
         intra_list.append(np.asarray(t_intra, dtype=float))
-        spread_list.append(np.asarray(sp_vals, dtype=float))
+        for v in EXOG_VARS:
+            exog_dict[v].append(np.asarray(var_vals[v], dtype=float))
 
     all_t = np.concatenate([e for e in events_list if len(e) > 0])
     if len(all_t) == 0:
@@ -85,10 +93,11 @@ def load_and_build(path: str):
             idx = np.argsort(events_list[i])
             events_list[i] = events_list[i][idx]
             intra_list[i] = intra_list[i][idx]
-            spread_list[i] = spread_list[i][idx]
+            for v in EXOG_VARS:
+                exog_dict[v][i] = exog_dict[v][i][idx]
 
     return {
-        "events": events_list, "intraday": intra_list, "spread": spread_list,
+        "events": events_list, "intraday": intra_list, "exog": exog_dict,
         "T": T, "n_days": n_days, "code": raw.get("code", ""),
     }
 
@@ -109,7 +118,7 @@ def fit_stock(code, built, model, init_from=None):
         r = fit_hawkes_additive(
             events, T, BETA_GRID, model=model, n_days=n_days,
             intraday_list=built["intraday"] if model in ("B", "C") else None,
-            spread_list=built["spread"] if model == "C" else None,
+            exog_lists=built["exog"] if model == "C" else None,
             maxiter=200, epsilon=1e-5, verbose=False,
             init_from=init_from)
         r["code"] = code
@@ -296,24 +305,32 @@ def plot_paper_figures(all_res, out_dir):
     plt.savefig(os.path.join(out_dir, "ll_monotonicity_scatter.png"), dpi=200, bbox_inches="tight")
     plt.close()
 
-    # ---------- 7. Gamma Spread 对比条形图 (Model C) ----------
-    print("  [VIZ] Gamma spread bar ...")
-    fig, ax = plt.subplots(figsize=(10, 5))
-    x = np.arange(4)
-    w = 0.25
-    for gi, g in enumerate(GROUP_NAMES):
-        ok = [r for r in all_res.get((g, "C"), []) if "error" not in r and "gamma_spread" in r]
-        if ok:
-            gs_mean = np.mean([r["gamma_spread"] for r in ok], axis=0)
-            ax.bar(x + gi * w, gs_mean, w, label=g.upper(), color=GROUP_COLORS[g], alpha=0.8)
-    ax.set_xticks(x + w)
-    ax.set_xticklabels(DIM_NAMES)
-    ax.set_ylabel(r"$\gamma_{spread}$ (normalized)")
-    ax.set_title("Spread Effect by Group (Model C)", fontweight="bold")
-    ax.legend()
-    ax.grid(axis="y", alpha=0.3)
+    # ---------- 7. Gamma Exog 对比条形图 (Model C) ----------
+    print("  [VIZ] Gamma exog bar ...")
+    ok_sample = [r for r in all_res.get(("high", "C"), []) if "error" not in r and "exog_vars" in r]
+    exog_var_names = ok_sample[0]["exog_vars"] if ok_sample else EXOG_VARS
+    n_exog = len(exog_var_names)
+    fig, axes = plt.subplots(1, n_exog, figsize=(8 * n_exog, 5))
+    if n_exog == 1:
+        axes = [axes]
+    for vi, v in enumerate(exog_var_names):
+        ax = axes[vi]
+        x = np.arange(4)
+        w = 0.25
+        for gi, g in enumerate(GROUP_NAMES):
+            ok = [r for r in all_res.get((g, "C"), []) if "error" not in r and ("gamma_%s" % v) in r]
+            if ok:
+                gs_mean = np.mean([r["gamma_%s" % v] for r in ok], axis=0)
+                ax.bar(x + gi * w, gs_mean, w, label=g.upper(), color=GROUP_COLORS[g], alpha=0.8)
+        ax.set_xticks(x + w)
+        ax.set_xticklabels(DIM_NAMES)
+        ax.set_ylabel(r"$\gamma$ (normalized)")
+        ax.set_title(r"$\gamma_{%s}$ by Group" % v.replace("_", r"\_"), fontweight="bold")
+        ax.legend()
+        ax.grid(axis="y", alpha=0.3)
+    plt.suptitle("Exogenous Effects (Model C)", fontsize=14, fontweight="bold")
     plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, "gamma_spread_bar.png"), dpi=200, bbox_inches="tight")
+    plt.savefig(os.path.join(out_dir, "gamma_exog_bar.png"), dpi=200, bbox_inches="tight")
     plt.close()
 
     # ---------- 8. AIC/BIC 改进量 (B-A, C-B) ----------

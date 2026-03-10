@@ -6,7 +6,8 @@
 Model A: λ_i(t) = μ_i + Σ_j α_{ij}·ω·exp(-ω·Δt)
 Model B: λ_i(t) = μ_{i,period(t)} + Σ_j α_{ij}·ω·exp(-ω·Δt)
          其中 period ∈ {normal, open30, mid30, close30}，分段常数基线
-Model C: Model B + γ_{spread,i}·x⁺(t)
+Model C: Model B + Σ_v γ_{v,i}·x_v⁺(t)
+         支持多外生变量 (OBI, log_opp_depth 等), 通过 exog_lists dict 传入
 
 核函数: φ_{ij}(Δt) = α_{ij}·ω·exp(-ω·Δt)
 积分:   ∫₀^∞ φ_{ij}(s)ds = α_{ij}
@@ -14,7 +15,7 @@ Model C: Model B + γ_{spread,i}·x⁺(t)
 EM M步全部闭式解:
   μ_{i,p} = Σ_{n:u_n=i,per(n)=p} p_{n,bg} / T_p
   α_{ij}  = Σ_{n:u_n=i} (α_{ij}·R_j[n]/λ_i) / N_j
-  γ_{spread,i} = Σ_{n:u_n=i} p_{n,spread} / X_total
+  γ_{v,i} = Σ_{n:u_n=i} p_{n,exog_v} / X_v_total   (每个外生变量独立更新)
 """
 
 import numpy as np
@@ -101,11 +102,17 @@ def compute_indicators(t_clock: float) -> Tuple[float, float, float]:
     return I_o, I_m, I_c
 
 
-def flatten_events(events_list, intraday_list=None, spread_list=None):
+def flatten_events(events_list, intraday_list=None, exog_lists=None):
     """
     将多维事件列表展平为按时间排序的数组。
 
-    Returns: (times, types, intraday_arr, spread_arr)
+    Parameters
+    ----------
+    exog_lists : Dict[str, List[np.ndarray]] 或 None
+        外生变量字典, key=变量名, value=每维事件对应值
+
+    Returns: (times, types, intraday_arr, exog_flat)
+        exog_flat : Dict[str, np.ndarray] 或 None
     """
     dim = len(events_list)
     N_total = sum(len(ev) for ev in events_list)
@@ -113,9 +120,9 @@ def flatten_events(events_list, intraday_list=None, spread_list=None):
     times = np.empty(N_total)
     types = np.empty(N_total, dtype=int)
     has_intra = intraday_list is not None
-    has_spread = spread_list is not None
+    has_exog = exog_lists is not None and len(exog_lists) > 0
     intra = np.empty(N_total) if has_intra else None
-    spread = np.empty(N_total) if has_spread else None
+    exog_flat = {v: np.empty(N_total) for v in exog_lists} if has_exog else None
 
     idx = 0
     for d in range(dim):
@@ -126,8 +133,9 @@ def flatten_events(events_list, intraday_list=None, spread_list=None):
         types[idx:idx + n] = d
         if has_intra:
             intra[idx:idx + n] = intraday_list[d]
-        if has_spread:
-            spread[idx:idx + n] = spread_list[d]
+        if has_exog:
+            for v in exog_lists:
+                exog_flat[v][idx:idx + n] = exog_lists[v][d]
         idx += n
 
     times = times[:idx]
@@ -137,9 +145,10 @@ def flatten_events(events_list, intraday_list=None, spread_list=None):
     types = types[sort_idx].astype(int)
     if has_intra:
         intra = intra[:idx][sort_idx]
-    if has_spread:
-        spread = spread[:idx][sort_idx]
-    return times, types, intra, spread
+    if has_exog:
+        for v in exog_flat:
+            exog_flat[v] = exog_flat[v][:idx][sort_idx]
+    return times, types, intra, exog_flat
 
 
 _flatten_events = flatten_events  # alias for backward compat
@@ -183,8 +192,8 @@ def em_hawkes_recursive(
         T: float, n_days: int = 1,
         model: str = "A",
         periods: Optional[np.ndarray] = None,
-        spread_shifted: Optional[np.ndarray] = None,
-        X_total: float = 1.0,
+        exog_shifted: Optional[Dict[str, np.ndarray]] = None,
+        x_totals: Optional[Dict[str, float]] = None,
         maxiter: int = 100, epsilon: float = 1e-4, verbose: bool = False,
         R_all: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
@@ -195,32 +204,34 @@ def em_hawkes_recursive(
     ----------
     mu_init : Model A → (dim,); Model B/C → (dim, 4)
     periods : (N,) int, 时段编号, Model B/C 需要
-    spread_shifted : (N,) ≥0 的 spread 值, Model C 需要
-    X_total : ∫₀ᵀ x⁺(t)dt 的近似
+    exog_shifted : Dict[str, (N,) ndarray], 各外生变量 ≥0 的归一化值
+    x_totals : Dict[str, float], 各外生变量的 ∫₀ᵀ x_v⁺(t)dt
     R_all : 预计算的 (N, dim), 若 None 则自动计算
     """
     N = len(times)
     if N == 0:
         return {"mu": mu_init, "alpha": alpha_init, "loglik": -np.inf, "n_iter": 0}
 
+    if exog_shifted is None:
+        exog_shifted = {}
+    if x_totals is None:
+        x_totals = {}
+    var_names = list(exog_shifted.keys())
+
     T_per = PERIOD_SECS_PER_DAY * n_days  # (4,)
     N_type = np.array([np.sum(types == d) for d in range(dim)])
 
-    # 预计算 R_all (只做一次)
     if R_all is None:
         R_all = _precompute_R(times, types, dim, omega)
 
-    # 补偿项
     comp = np.zeros(dim)
     for d in range(dim):
         mask_d = types == d
         comp[d] = np.sum(1.0 - np.exp(-omega * (T - times[mask_d])))
 
-    # 预计算事件类型 mask 和索引
     type_masks = [(types == d) for d in range(dim)]
-    type_idx = types  # (N,) int
+    type_idx = types
 
-    # 初始化参数
     alpha = alpha_init.copy().astype(float)
     if model == "A":
         mu = mu_init.copy().ravel().astype(float)
@@ -228,13 +239,12 @@ def em_hawkes_recursive(
         mu_p = mu_init.copy().astype(float)
         if mu_p.ndim == 1:
             mu_p = np.tile(mu_p.reshape(-1, 1), (1, N_PERIODS))
-    if model == "C":
-        init_base = N_type / T + 0.01
-        gamma_sp = init_base * 0.1
-    else:
-        gamma_sp = None
 
-    # 预计算 period masks (Model B/C)
+    gamma_exog = None
+    if model == "C" and var_names:
+        init_base = N_type / T + 0.01
+        gamma_exog = {v: init_base * 0.1 for v in var_names}
+
     period_masks = None
     if model in ("B", "C") and periods is not None:
         period_masks = {}
@@ -245,34 +255,29 @@ def em_hawkes_recursive(
     old_ll = -1e30
 
     for it in range(maxiter):
-        # === E步 + M步 (全向量化) ===
-
-        # 1. 计算基线 bases[n]
         if model == "A":
-            bases = mu[type_idx]  # (N,)
+            bases = mu[type_idx]
         else:
-            bases = mu_p[type_idx, periods]  # (N,)
+            bases = mu_p[type_idx, periods]
 
-        # 2. 激励 exc[n] = Σ_j α[type_n, j] * R_all[n, j]
-        exc = np.sum(alpha[type_idx, :] * R_all, axis=1)  # (N,)
+        exc = np.sum(alpha[type_idx, :] * R_all, axis=1)
 
-        # 3. Spread
+        sp_per_var = {}
         sp = np.zeros(N)
-        if model == "C" and gamma_sp is not None and spread_shifted is not None:
-            sp = gamma_sp[type_idx] * spread_shifted  # (N,)
+        if model == "C" and gamma_exog is not None:
+            for v in var_names:
+                sp_v = gamma_exog[v][type_idx] * exog_shifted[v]
+                sp_per_var[v] = sp_v
+                sp += sp_v
 
-        # 4. 强度
         lam = bases + exc + sp
         lam = np.maximum(lam, 1e-15)
         inv_lam = 1.0 / lam
 
-        # 5. LL 求和
         ll_sum = np.sum(np.log(lam))
 
-        # === M步 累积 ===
-        bg_w = bases * inv_lam  # p_{n,base} (N,)
+        bg_w = bases * inv_lam
 
-        # 更新 mu
         if model == "A":
             new_mu = np.zeros(dim)
             for i in range(dim):
@@ -287,33 +292,34 @@ def em_hawkes_recursive(
                         new_mu_p[i, p] = max(s / T_per[p], 1e-10)
             mu_p = new_mu_p
 
-        # 更新 gamma_spread
-        if model == "C" and gamma_sp is not None and X_total > 0:
-            sp_w = sp * inv_lam  # (N,)
-            new_gs = np.zeros(dim)
-            for i in range(dim):
-                new_gs[i] = max(np.sum(sp_w[type_masks[i]]) / X_total, 0.0)
-            gamma_sp = new_gs
+        if model == "C" and gamma_exog is not None:
+            for v in var_names:
+                xt = x_totals.get(v, 1.0)
+                if xt > 0:
+                    sp_w_v = sp_per_var[v] * inv_lam
+                    new_gv = np.zeros(dim)
+                    for i in range(dim):
+                        new_gv[i] = max(np.sum(sp_w_v[type_masks[i]]) / xt, 0.0)
+                    gamma_exog[v] = new_gv
 
-        # 更新 alpha
-        # sum_alpha_num[i,j] = Σ_{n: u_n=i} α[i,j] * R_all[n,j] / λ[n]
         new_alpha = np.zeros((dim, dim))
         for i in range(dim):
             m_i = type_masks[i]
-            R_i = R_all[m_i, :]  # (N_i, dim)
-            w_i = inv_lam[m_i]   # (N_i,)
+            R_i = R_all[m_i, :]
+            w_i = inv_lam[m_i]
             for j in range(dim):
                 if N_type[j] > 0:
                     new_alpha[i, j] = max(
                         alpha[i, j] * np.dot(R_i[:, j], w_i) / N_type[j], 0.0)
         alpha = new_alpha
 
-        # === LL ===
         if model == "A":
             int_base = np.sum(mu) * T
         else:
             int_base = np.sum(mu_p * T_per[np.newaxis, :])
-        int_sp = np.sum(gamma_sp) * X_total if model == "C" else 0.0
+        int_sp = 0.0
+        if model == "C" and gamma_exog is not None:
+            int_sp = sum(np.sum(gamma_exog[v]) * x_totals.get(v, 1.0) for v in var_names)
         int_exc = np.sum(alpha * comp[np.newaxis, :])
         ll = ll_sum - int_base - int_sp - int_exc
 
@@ -325,7 +331,6 @@ def em_hawkes_recursive(
             break
         old_ll = ll
 
-    # --- 组装结果 ---
     res = {"alpha": alpha.copy(), "loglik": float(ll), "n_iter": it + 1}
     if model == "A":
         res["mu"] = mu.copy()
@@ -336,8 +341,8 @@ def em_hawkes_recursive(
         res["gamma_open"] = mu_p[:, PERIOD_OPEN] - mu_normal
         res["gamma_mid"] = mu_p[:, PERIOD_MID] - mu_normal
         res["gamma_close"] = mu_p[:, PERIOD_CLOSE] - mu_normal
-    if model == "C":
-        res["gamma_spread"] = gamma_sp.copy()
+    if model == "C" and gamma_exog is not None:
+        res["gamma_exog"] = {v: gamma_exog[v].copy() for v in var_names}
     return res
 
 
@@ -346,51 +351,48 @@ def em_hawkes_recursive(
 def compute_loglikelihood(
         times, types, dim, omega, alpha, T, n_days=1,
         model="A", mu=None, mu_periods=None,
-        periods=None, gamma_spread=None, spread_shifted=None, X_total=1.0,
+        periods=None,
+        gamma_exog=None, exog_shifted=None, x_totals=None,
 ) -> float:
     """递推计算 LL, 用于独立验证。"""
     N = len(times)
-    model_code = {"A": 0, "B": 1, "C": 2}[model]
+    if gamma_exog is None:
+        gamma_exog = {}
+    if exog_shifted is None:
+        exog_shifted = {}
+    if x_totals is None:
+        x_totals = {}
+    var_names = list(gamma_exog.keys())
 
-    if _USE_CYTHON:
-        _mu = np.ascontiguousarray(mu if mu is not None else np.zeros(dim), dtype=np.float64)
-        _mu_p = np.ascontiguousarray(mu_periods if mu_periods is not None else np.zeros((dim, N_PERIODS)), dtype=np.float64)
-        _per = np.ascontiguousarray(periods if periods is not None else np.zeros(N, dtype=np.int64), dtype=np.int64)
-        _gs = np.ascontiguousarray(gamma_spread if gamma_spread is not None else np.zeros(dim), dtype=np.float64)
-        _ss = np.ascontiguousarray(spread_shifted if spread_shifted is not None else np.zeros(N), dtype=np.float64)
-        ll_sum = compute_ll_cy(
-            np.ascontiguousarray(times, dtype=np.float64),
-            np.ascontiguousarray(types, dtype=np.int64),
-            dim, float(omega),
-            np.ascontiguousarray(alpha, dtype=np.float64),
-            model_code, _mu, _mu_p, _per, _gs, _ss)
-    else:
-        R = np.zeros(dim)
-        ll_sum = 0.0
-        last_t = 0.0
-        for n in range(N):
-            dt = times[n] - last_t
-            i = types[n]
-            if dt > 0:
-                R *= np.exp(-omega * dt)
-            if model == "A":
-                lam = mu[i]
-            else:
-                lam = mu_periods[i, periods[n]]
-            lam += np.dot(alpha[i, :], R)
-            if model == "C" and gamma_spread is not None and spread_shifted is not None:
-                lam += gamma_spread[i] * spread_shifted[n]
-            lam = max(lam, 1e-15)
-            ll_sum += np.log(lam)
-            R[i] += omega
-            last_t = times[n]
+    R = np.zeros(dim)
+    ll_sum = 0.0
+    last_t = 0.0
+    for n in range(N):
+        dt = times[n] - last_t
+        i = types[n]
+        if dt > 0:
+            R *= np.exp(-omega * dt)
+        if model == "A":
+            lam = mu[i]
+        else:
+            lam = mu_periods[i, periods[n]]
+        lam += np.dot(alpha[i, :], R)
+        if model == "C":
+            for v in var_names:
+                lam += gamma_exog[v][i] * exog_shifted[v][n]
+        lam = max(lam, 1e-15)
+        ll_sum += np.log(lam)
+        R[i] += omega
+        last_t = times[n]
 
     T_per = PERIOD_SECS_PER_DAY * n_days
     if model == "A":
         int_base = np.sum(mu) * T
     else:
         int_base = np.sum(mu_periods * T_per[np.newaxis, :])
-    int_sp = np.sum(gamma_spread) * X_total if (model == "C" and gamma_spread is not None) else 0.0
+    int_sp = 0.0
+    if model == "C":
+        int_sp = sum(np.sum(gamma_exog[v]) * x_totals.get(v, 1.0) for v in var_names)
     comp = np.zeros(dim)
     for n in range(N):
         comp[types[n]] += 1.0 - np.exp(-omega * (T - times[n]))
@@ -403,59 +405,50 @@ def compute_loglikelihood(
 def gof_residuals(
         times, types, dim, omega, alpha, T, n_days=1,
         model="A", mu=None, mu_periods=None, periods=None,
-        gamma_spread=None, spread_shifted=None,
+        gamma_exog=None, exog_shifted=None,
 ) -> Dict[str, Any]:
     """
     时间重标度残差: 若模型正确, τ_k ~ Exp(1)。
     使用精确激励积分。
     """
     N = len(times)
-    model_code = {"A": 0, "B": 1, "C": 2}[model]
+    if gamma_exog is None:
+        gamma_exog = {}
+    if exog_shifted is None:
+        exog_shifted = {}
+    var_names = list(gamma_exog.keys())
 
-    if _USE_CYTHON:
-        _mu = np.ascontiguousarray(mu if mu is not None else np.zeros(dim), dtype=np.float64)
-        _mu_p = np.ascontiguousarray(mu_periods if mu_periods is not None else np.zeros((dim, N_PERIODS)), dtype=np.float64)
-        _per = np.ascontiguousarray(periods if periods is not None else np.zeros(N, dtype=np.int64), dtype=np.int64)
-        _gs = np.ascontiguousarray(gamma_spread if gamma_spread is not None else np.zeros(dim), dtype=np.float64)
-        _ss = np.ascontiguousarray(spread_shifted if spread_shifted is not None else np.zeros(N), dtype=np.float64)
-        residuals_lists = gof_residuals_cy(
-            np.ascontiguousarray(times, dtype=np.float64),
-            np.ascontiguousarray(types, dtype=np.int64),
-            dim, float(omega),
-            np.ascontiguousarray(alpha, dtype=np.float64),
-            T, model_code, _mu, _mu_p, _per, _gs, _ss)
-        residuals = {d: residuals_lists[d] for d in range(dim)}
-    else:
-        residuals = {d: [] for d in range(dim)}
-        R = np.zeros(dim)
-        Lambda_run = np.zeros(dim)
-        seen = np.zeros(dim, dtype=bool)
-        last_t = 0.0
+    residuals = {d: [] for d in range(dim)}
+    R = np.zeros(dim)
+    Lambda_run = np.zeros(dim)
+    seen = np.zeros(dim, dtype=bool)
+    last_t = 0.0
 
-        for k in range(N):
-            dt = times[k] - last_t
-            i = types[k]
-            if dt > 0:
-                decay = np.exp(-omega * dt)
-                for d in range(dim):
-                    if model == "A":
-                        b = mu[d]
-                    else:
-                        b = mu_periods[d, periods[k]]
-                    base_int = b * dt
-                    exc_int = np.dot(alpha[d, :], R) * (1.0 - decay) / omega if omega > 0 else 0.0
-                    sp_int = 0.0
-                    if model == "C" and gamma_spread is not None and spread_shifted is not None:
-                        sp_int = gamma_spread[d] * spread_shifted[k] * dt
-                    Lambda_run[d] += base_int + exc_int + sp_int
-                R *= decay
+    for k in range(N):
+        dt = times[k] - last_t
+        i = types[k]
+        if dt > 0:
+            decay = np.exp(-omega * dt)
+            for d in range(dim):
+                if model == "A":
+                    b = mu[d]
+                else:
+                    b = mu_periods[d, periods[k]]
+                base_int = b * dt
+                exc_int = np.dot(alpha[d, :], R) * (1.0 - decay) / omega if omega > 0 else 0.0
+                sp_int = 0.0
+                if model == "C":
+                    for v in var_names:
+                        sp_int += gamma_exog[v][d] * exog_shifted[v][k] * dt
+                Lambda_run[d] += base_int + exc_int + sp_int
+            R *= decay
 
-            if seen[i] and Lambda_run[i] > 0:
-                residuals[i].append(Lambda_run[i])
-            seen[i] = True
-            Lambda_run[i] = 0.0
-            R[i] += omega
-            last_t = times[k]
+        if seen[i] and Lambda_run[i] > 0:
+            residuals[i].append(Lambda_run[i])
+        seen[i] = True
+        Lambda_run[i] = 0.0
+        R[i] += omega
+        last_t = times[k]
 
     results = {}
     np.random.seed(0)
@@ -496,7 +489,7 @@ def fit_hawkes_additive(
         model: str = "A",
         n_days: int = 1,
         intraday_list=None,
-        spread_list=None,
+        exog_lists: Optional[Dict[str, List[np.ndarray]]] = None,
         maxiter: int = 100,
         epsilon: float = 1e-4,
         verbose: bool = False,
@@ -509,11 +502,13 @@ def fit_hawkes_additive(
     T : 总时长 (交易时间)
     beta_grid : 候选 omega
     model : "A" / "B" / "C"
+    exog_lists : Dict[str, List[np.ndarray]] — 外生变量 {变量名: [每维数组]}
     init_from : 上一个模型的拟合结果（用于热启动，确保 LL 单调性）
     """
     dim = len(events_list)
-    times, types, intra_arr, spread_arr = flatten_events(
-        events_list, intraday_list, spread_list)
+    times, types, intra_arr, exog_flat = flatten_events(
+        events_list, intraday_list,
+        exog_lists if model == "C" else None)
     N = len(times)
     if N < 2:
         raise ValueError("events too few: %d" % N)
@@ -524,30 +519,36 @@ def fit_hawkes_additive(
     if model in ("B", "C"):
         periods = np.array([get_period_tt(t % TRADING_SECONDS_PER_DAY) for t in times], dtype=int)
 
-    # Spread 处理: z-score 归一化 + 非负平移 + max=1 归一化
-    spread_shifted = None
-    x_total = 1.0
-    x_shift = 0.0
-    spread_scale = 1.0
-    if model == "C" and spread_arr is not None:
-        sp_mean = float(np.mean(spread_arr))
-        sp_std = float(np.std(spread_arr))
-        spread_scale = sp_std if sp_std > 1e-10 else 1.0
-        sp_z = (spread_arr - sp_mean) / spread_scale
-        x_shift = float(np.min(sp_z))
-        spread_shifted = sp_z - x_shift
-        sp_max = float(np.max(spread_shifted))
-        if sp_max > 1e-10:
-            spread_shifted = spread_shifted / sp_max
-        if N > 1:
-            dt_arr = np.diff(times)
-            x_total = float(np.sum(spread_shifted[:-1] * dt_arr)
-                            + spread_shifted[-1] * max(T - times[-1], 0))
-            x_total = max(x_total, 1.0)
+    # 外生变量处理: 对每个变量做 z-score + 非负平移 + max=1 归一化
+    exog_shifted = {}
+    x_totals = {}
+    exog_meta = {}
+    if model == "C" and exog_flat is not None:
+        for v, arr in exog_flat.items():
+            sp_mean = float(np.mean(arr))
+            sp_std = float(np.std(arr))
+            scale = sp_std if sp_std > 1e-10 else 1.0
+            sp_z = (arr - sp_mean) / scale
+            shift = float(np.min(sp_z))
+            shifted = sp_z - shift
+            sp_max = float(np.max(shifted))
+            if sp_max > 1e-10:
+                shifted = shifted / sp_max
+            exog_shifted[v] = shifted
+            exog_meta[v] = {"scale": scale, "shift": shift}
+            if N > 1:
+                dt_arr = np.diff(times)
+                xt = float(np.sum(shifted[:-1] * dt_arr)
+                           + shifted[-1] * max(T - times[-1], 0))
+                x_totals[v] = max(xt, 1.0)
+            else:
+                x_totals[v] = 1.0
+
+    var_names = list(exog_shifted.keys())
+    n_exog = len(var_names)
 
     base_rate = N_type / T + 0.01
 
-    # 如果有上一个模型的结果，优先用其 omega 作为候选
     if init_from is not None and "omega" in init_from:
         prev_omega = init_from["omega"]
         if prev_omega not in beta_grid:
@@ -579,7 +580,9 @@ def fit_hawkes_additive(
 
         res = em_hawkes_recursive(
             times, types, dim, omega, mu_init, alpha_init,
-            T, n_days, model, periods, spread_shifted, x_total,
+            T, n_days, model, periods,
+            exog_shifted if model == "C" else None,
+            x_totals if model == "C" else None,
             maxiter, epsilon, verbose=False, R_all=R_all)
 
         if verbose:
@@ -589,7 +592,7 @@ def fit_hawkes_additive(
             best_res = res
             best_omega = omega
 
-    # 暖启动: 用最优 omega 再跑一次 (更多迭代)
+    # 暖启动: 用最优 omega 再跑一次
     R_all_best = _precompute_R(times, types, dim, best_omega)
     if model == "A":
         mu_warm = best_res["mu"].copy()
@@ -598,7 +601,9 @@ def fit_hawkes_additive(
     alpha_warm = best_res["alpha"].copy()
     best_res = em_hawkes_recursive(
         times, types, dim, best_omega, mu_warm, alpha_warm,
-        T, n_days, model, periods, spread_shifted, x_total,
+        T, n_days, model, periods,
+        exog_shifted if model == "C" else None,
+        x_totals if model == "C" else None,
         maxiter=maxiter * 2, epsilon=epsilon / 10, verbose=verbose,
         R_all=R_all_best)
     best_ll = best_res["loglik"]
@@ -616,7 +621,9 @@ def fit_hawkes_additive(
             alpha_prev = np.array(init_from["alpha"], dtype=float)
             res_retry = em_hawkes_recursive(
                 times, types, dim, prev_omega, mu_prev, alpha_prev,
-                T, n_days, model, periods, spread_shifted, x_total,
+                T, n_days, model, periods,
+                exog_shifted if model == "C" else None,
+                x_totals if model == "C" else None,
                 maxiter=maxiter * 3, epsilon=epsilon / 100, verbose=verbose,
                 R_all=R_all_prev)
             if res_retry["loglik"] > best_ll:
@@ -624,14 +631,14 @@ def fit_hawkes_additive(
                 best_res = res_retry
                 best_omega = prev_omega
 
-        # 兜底：若 C 模型仍 < B 模型 LL，退化 gamma_spread=0 并继承 B 参数
+        # 兜底：若 C 模型仍 < B 模型 LL，退化 gamma=0 并继承 B 参数
         if best_ll < init_from["loglik"] and model == "C":
             if verbose:
-                print("  [fallback] Model C LL < Model B LL, degenerating gamma_spread=0")
+                print("  [fallback] Model C LL < Model B LL, degenerating gamma_exog=0")
             best_ll = init_from["loglik"]
             best_omega = init_from["omega"]
             best_res["loglik"] = best_ll
-            best_res["gamma_spread"] = np.zeros(dim)
+            best_res["gamma_exog"] = {v: np.zeros(dim) for v in var_names}
             if "mu_periods" in init_from:
                 best_res["mu_periods"] = np.array(init_from["mu_periods"], dtype=float)
             if "alpha" in init_from:
@@ -649,15 +656,16 @@ def fit_hawkes_additive(
     elif model == "B":
         k = N_PERIODS * dim + dim * dim
     else:
-        k = N_PERIODS * dim + dim + dim * dim
+        k = N_PERIODS * dim + n_exog * dim + dim * dim
 
     aic = -2 * best_ll + 2 * k
     bic = -2 * best_ll + k * np.log(N)
 
+    gamma_exog = best_res.get("gamma_exog", {})
     gof = gof_residuals(
         times, types, dim, best_omega, best_res["alpha"], T, n_days,
         model, best_res.get("mu"), best_res.get("mu_periods"), periods,
-        best_res.get("gamma_spread"), spread_shifted)
+        gamma_exog, exog_shifted)
 
     out = {
         "model": model, "omega": float(best_omega),
@@ -674,10 +682,10 @@ def fit_hawkes_additive(
         out["gamma_close"] = best_res["gamma_close"].tolist()
         out["mu_periods"] = best_res["mu_periods"].tolist()
     if model == "C":
-        out["gamma_spread"] = best_res["gamma_spread"].tolist()
-        out["gamma_spread_raw"] = (best_res["gamma_spread"] / spread_scale).tolist()
-        out["x_shift"] = x_shift
-        out["spread_scale"] = spread_scale
+        out["exog_vars"] = var_names
+        for v in var_names:
+            out["gamma_%s" % v] = gamma_exog[v].tolist()
+            out["gamma_%s_raw" % v] = (gamma_exog[v] / exog_meta[v]["scale"]).tolist()
     out["gof_details"] = {str(d): gof[d] for d in range(dim) if d in gof}
     return out
 
@@ -754,7 +762,7 @@ def simulate_hawkes_additive(
 
 def run_abc_comparison(
         events_list, T, beta_grid, n_days=1,
-        intraday_list=None, spread_list=None,
+        intraday_list=None, exog_lists=None,
         maxiter=100, verbose=True,
 ) -> Dict[str, Any]:
     """
@@ -770,7 +778,7 @@ def run_abc_comparison(
         r = fit_hawkes_additive(
             events_list, T, beta_grid, model=m, n_days=n_days,
             intraday_list=intraday_list if m in ("B", "C") else None,
-            spread_list=spread_list if m == "C" else None,
+            exog_lists=exog_lists if m == "C" else None,
             maxiter=maxiter, verbose=verbose)
         r["elapsed_s"] = _time.time() - t0
         results[m] = r
