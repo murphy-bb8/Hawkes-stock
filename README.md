@@ -512,6 +512,18 @@ conda activate py385
 pip install numpy scipy matplotlib cython
 ```
 
+### 编译 Cython 加速模块（可选）
+
+EM 主循环、对数似然、GOF 残差等核心计算已用 Cython 实现以加速。若未编译，程序会自动回退到纯 Python 实现。
+
+在项目根目录执行：
+
+```powershell
+python setup_cy.py build_ext --inplace
+```
+
+或双击 `build_cython.bat`（需将脚本内 Python 路径改为本机环境）。
+
 ---
 
 ## 参考

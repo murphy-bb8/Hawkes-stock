@@ -27,10 +27,11 @@ from scipy.stats import kstest, wasserstein_distance
 
 # Cython 加速模块（可选，回退到纯 Python）
 try:
-    from _hawkes_cy import precompute_R_cy, gof_residuals_cy, compute_ll_cy
+    from _hawkes_cy import precompute_R_cy, gof_residuals_cy, compute_ll_cy, em_hawkes_recursive_cy
     _USE_CYTHON = True
 except ImportError:
     _USE_CYTHON = False
+    em_hawkes_recursive_cy = None
 
 # ===================== A股交易时间常量 =====================
 MARKET_OPEN_AM = 34200    # 09:30
@@ -199,14 +200,7 @@ def em_hawkes_recursive(
 ) -> Dict[str, Any]:
     """
     向量化递推 EM。R_all 预计算后，每次迭代全部 numpy 向量化。
-
-    Parameters
-    ----------
-    mu_init : Model A → (dim,); Model B/C → (dim, 4)
-    periods : (N,) int, 时段编号, Model B/C 需要
-    exog_shifted : Dict[str, (N,) ndarray], 各外生变量 ≥0 的归一化值
-    x_totals : Dict[str, float], 各外生变量的 ∫₀ᵀ x_v⁺(t)dt
-    R_all : 预计算的 (N, dim), 若 None 则自动计算
+    若 Cython 可用，优先调用 em_hawkes_recursive_cy 加速。
     """
     N = len(times)
     if N == 0:
@@ -218,8 +212,8 @@ def em_hawkes_recursive(
         x_totals = {}
     var_names = list(exog_shifted.keys())
 
-    T_per = PERIOD_SECS_PER_DAY * n_days  # (4,)
-    N_type = np.array([np.sum(types == d) for d in range(dim)])
+    model_code = {"A": 0, "B": 1, "C": 2}[model]
+    N_type = np.array([np.sum(types == d) for d in range(dim)], dtype=np.int64)
 
     if R_all is None:
         R_all = _precompute_R(times, types, dim, omega)
@@ -229,6 +223,40 @@ def em_hawkes_recursive(
         mask_d = types == d
         comp[d] = np.sum(1.0 - np.exp(-omega * (T - times[mask_d])))
 
+    if periods is None:
+        periods = np.zeros(N, dtype=np.int64)
+
+    _mu = np.asarray(mu_init, dtype=np.float64)
+    if _mu.ndim == 1:
+        mu_init_2d = np.ascontiguousarray(
+            np.tile(_mu.reshape(-1, 1), (1, N_PERIODS)), dtype=np.float64)
+    else:
+        mu_init_2d = np.ascontiguousarray(_mu, dtype=np.float64)
+
+    if _USE_CYTHON and em_hawkes_recursive_cy is not None and not verbose:
+        exog_2d = None
+        xtot_1d = None
+        if var_names:
+            exog_2d = np.ascontiguousarray(
+                np.stack([exog_shifted[v] for v in var_names]), dtype=np.float64)
+            xtot_1d = np.array([x_totals.get(v, 1.0) for v in var_names], dtype=np.float64)
+        try:
+            return em_hawkes_recursive_cy(
+                np.ascontiguousarray(times, dtype=np.float64),
+                np.ascontiguousarray(types, dtype=np.int64),
+                dim, float(omega), mu_init_2d,
+                np.ascontiguousarray(alpha_init, dtype=np.float64),
+                T, n_days, model_code,
+                np.ascontiguousarray(periods, dtype=np.int64),
+                np.ascontiguousarray(R_all, dtype=np.float64),
+                np.ascontiguousarray(comp, dtype=np.float64),
+                N_type,
+                exog_2d, xtot_1d, var_names,
+                maxiter, epsilon)
+        except Exception:
+            pass
+
+    T_per = PERIOD_SECS_PER_DAY * n_days  # (4,)
     type_masks = [(types == d) for d in range(dim)]
     type_idx = types
 
