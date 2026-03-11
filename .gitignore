@@ -64,23 +64,29 @@ summarize_results.py
 demo_abc.py
 _extract_stats.py
 test_*.py
+!test_exog_combinations.py
 test-mathjax.md
 
-# ---------- 旧版结果目录 ----------
+# ---------- 结果目录：仅上传 results_additive ----------
+# 以下旧版/其他结果目录全部忽略
 results_em/
 results_exog_em/
 results_noexog_em/
 exo-intraday/
+# 其他可能的 results_* 目录（若存在）
+results_comparison/
+results_sim/
+results_test/
 
-# ---------- 旧版 JSON 结果文件 ----------
+# results_additive：上传 PNG 图表，忽略 JSON（体积较大）
+results_additive/*.json
+
+# ---------- 旧版 JSON 结果文件（项目根目录）----------
 baseline_comparison_results.json
 demo_abc_results.json
 experiment_results.json
 test_small_batch_results.json
 simulation_1d_additive_results.json
-
-# ---------- 加性基线结果：只保留 PNG 图片 ----------
-results_additive/*.json
 
 # ---------- 旧版 Jekyll / Pages ----------
 index.md
@@ -93,10 +99,9 @@ out/
 # 保留的文件清单（不忽略）：
 #   hawkes_em_additive.py        核心加性基线 EM 模块
 #   run_experiment_additive.py   45 只股票实验入口
-#   run_small_test_additive.py   小规模测试脚本
+#   test_exog_combinations.py    外生变量组合测试 (C1–C7)
 #   _hawkes_cy.pyx               Cython 递推源码
-#   _hawkes_cython.pyx           Cython 递推源码
-#   results_additive/*.png       全部可视化图表
+#   results_additive/            实验结果（仅上传此目录，*.png 保留，*.json 忽略）
 #   index.html                   GitHub Pages 主页
 #   assets/                      CSS / JS 资源
 #   _config.yml                  Jekyll 配置
